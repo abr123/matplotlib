@@ -1,14 +1,7 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
-import six
-
-import matplotlib._tri as _tri
-import matplotlib._qhull as _qhull
 import numpy as np
 
 
-class Triangulation(object):
+class Triangulation:
     """
     An unstructured triangular grid consisting of npoints points and
     ntri triangles.  The triangles can either be specified by the user
@@ -16,22 +9,26 @@ class Triangulation(object):
 
     Parameters
     ----------
-    x, y : array_like of shape (npoints)
+    x, y : array-like of shape (npoints)
         Coordinates of grid points.
-    triangles : integer array_like of shape (ntri, 3), optional
+    triangles : int array-like of shape (ntri, 3), optional
         For each triangle, the indices of the three points that make
         up the triangle, ordered in an anticlockwise manner.  If not
         specified, the Delaunay triangulation is calculated.
-    mask : boolean array_like of shape (ntri), optional
+    mask : bool array-like of shape (ntri), optional
         Which triangles are masked out.
 
     Attributes
     ----------
-    edges
-    neighbors
+    edges : int array of shape (nedges, 2)
+        See `~.Triangulation.edges`
+    neighbors : int array of shape (ntri, 3)
+        See `~.Triangulation.neighbors`
+    mask : bool array of shape (ntri, 3)
+        Masked out triangles.
     is_delaunay : bool
         Whether the Triangulation is a calculated Delaunay
-        triangulation (where `triangles` was not specified) or not.
+        triangulation (where *triangles* was not specified) or not.
 
     Notes
     -----
@@ -39,9 +36,11 @@ class Triangulation(object):
     triangles formed from colinear points, or overlapping triangles.
     """
     def __init__(self, x, y, triangles=None, mask=None):
+        from matplotlib import _qhull
+
         self.x = np.asarray(x, dtype=np.float64)
         self.y = np.asarray(y, dtype=np.float64)
-        if self.x.shape != self.y.shape or len(self.x.shape) != 1:
+        if self.x.shape != self.y.shape or self.x.ndim != 1:
             raise ValueError("x and y must be equal-length 1-D arrays")
 
         self.mask = None
@@ -57,18 +56,17 @@ class Triangulation(object):
         else:
             # Triangulation specified. Copy, since we may correct triangle
             # orientation.
-            self.triangles = np.array(triangles, dtype=np.int32)
+            self.triangles = np.array(triangles, dtype=np.int32, order='C')
             if self.triangles.ndim != 2 or self.triangles.shape[1] != 3:
-                raise ValueError('triangles must be a (?,3) array')
+                raise ValueError('triangles must be a (?, 3) array')
             if self.triangles.max() >= len(self.x):
                 raise ValueError('triangles max element is out of bounds')
             if self.triangles.min() < 0:
                 raise ValueError('triangles min element is out of bounds')
 
         if mask is not None:
-            self.mask = np.asarray(mask, dtype=np.bool)
-            if (len(self.mask.shape) != 1 or
-                    self.mask.shape[0] != self.triangles.shape[0]):
+            self.mask = np.asarray(mask, dtype=bool)
+            if self.mask.shape != (self.triangles.shape[0],):
                 raise ValueError('mask array must have same length as '
                                  'triangles array')
 
@@ -81,33 +79,37 @@ class Triangulation(object):
     def calculate_plane_coefficients(self, z):
         """
         Calculate plane equation coefficients for all unmasked triangles from
-        the point (x,y) coordinates and specified z-array of shape (npoints).
-        Returned array has shape (npoints,3) and allows z-value at (x,y)
+        the point (x, y) coordinates and specified z-array of shape (npoints).
+        The returned array has shape (npoints, 3) and allows z-value at (x, y)
         position in triangle tri to be calculated using
-        z = array[tri,0]*x + array[tri,1]*y + array[tri,2].
+        ``z = array[tri, 0] * x  + array[tri, 1] * y + array[tri, 2]``.
         """
         return self.get_cpp_triangulation().calculate_plane_coefficients(z)
 
     @property
     def edges(self):
         """
-        Return integer array of shape (nedges,2) containing all edges of
+        Return integer array of shape (nedges, 2) containing all edges of
         non-masked triangles.
 
-        Each edge is the start point index and end point index.  Each
-        edge (start,end and end,start) appears only once.
+        Each row defines an edge by it's start point index and end point
+        index.  Each edge appears only once, i.e. for an edge between points
+        *i*  and *j*, there will only be either *(i, j)* or *(j, i)*.
         """
         if self._edges is None:
             self._edges = self.get_cpp_triangulation().get_edges()
         return self._edges
 
     def get_cpp_triangulation(self):
-        # Return the underlying C++ Triangulation object, creating it
-        # if necessary.
+        """
+        Return the underlying C++ Triangulation object, creating it
+        if necessary.
+        """
+        from matplotlib import _tri
         if self._cpp_triangulation is None:
             self._cpp_triangulation = _tri.Triangulation(
                 self.x, self.y, self.triangles, self.mask, self._edges,
-                self._neighbors)
+                self._neighbors, not self.is_delaunay)
         return self._cpp_triangulation
 
     def get_masked_triangles(self):
@@ -115,7 +117,7 @@ class Triangulation(object):
         Return an array of triangles that are not masked.
         """
         if self.mask is not None:
-            return self.triangles.compress(1 - self.mask, axis=0)
+            return self.triangles[~self.mask]
         else:
             return self.triangles
 
@@ -132,17 +134,14 @@ class Triangulation(object):
         the possible args and kwargs.
         """
         if isinstance(args[0], Triangulation):
-            triangulation = args[0]
-            args = args[1:]
+            triangulation, *args = args
         else:
-            x = args[0]
-            y = args[1]
-            args = args[2:]  # Consumed first two args.
+            x, y, *args = args
 
             # Check triangles in kwargs then args.
             triangles = kwargs.pop('triangles', None)
             from_args = False
-            if triangles is None and len(args) > 0:
+            if triangles is None and args:
                 triangles = args[0]
                 from_args = True
 
@@ -167,7 +166,7 @@ class Triangulation(object):
 
     def get_trifinder(self):
         """
-        Return the default :class:`matplotlib.tri.TriFinder` of this
+        Return the default `matplotlib.tri.TriFinder` of this
         triangulation, creating it if necessary.  This allows the same
         TriFinder object to be easily shared.
         """
@@ -180,14 +179,13 @@ class Triangulation(object):
     @property
     def neighbors(self):
         """
-        Return integer array of shape (ntri,3) containing neighbor
-        triangles.
+        Return integer array of shape (ntri, 3) containing neighbor triangles.
 
         For each triangle, the indices of the three triangles that
         share the same edges, or -1 if there is no such neighboring
-        triangle.  neighbors[i,j] is the triangle that is the neighbor
-        to the edge from point index triangles[i,j] to point index
-        triangles[i,(j+1)%3].
+        triangle.  ``neighbors[i, j]`` is the triangle that is the neighbor
+        to the edge from point index ``triangles[i, j]`` to point index
+        ``triangles[i, (j+1)%3]``.
         """
         if self._neighbors is None:
             self._neighbors = self.get_cpp_triangulation().get_neighbors()
@@ -195,15 +193,17 @@ class Triangulation(object):
 
     def set_mask(self, mask):
         """
-        Set or clear the mask array.  This is either None, or a boolean
-        array of shape (ntri).
+        Set or clear the mask array.
+
+        Parameters
+        ----------
+        mask : None or bool array of length ntri
         """
         if mask is None:
             self.mask = None
         else:
-            self.mask = np.asarray(mask, dtype=np.bool)
-            if (len(self.mask.shape) != 1 or
-                    self.mask.shape[0] != self.triangles.shape[0]):
+            self.mask = np.asarray(mask, dtype=bool)
+            if self.mask.shape != (self.triangles.shape[0],):
                 raise ValueError('mask array must have same length as '
                                  'triangles array')
 

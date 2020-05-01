@@ -1,54 +1,24 @@
-#!/usr/bin/env python
 """
-Module for creating Sankey diagrams using matplotlib
+Module for creating Sankey diagrams using Matplotlib.
 """
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
 
-import six
-from six.moves import zip
+import logging
+from types import SimpleNamespace
+
+import numpy as np
+
+import matplotlib as mpl
+from matplotlib.path import Path
+from matplotlib.patches import PathPatch
+from matplotlib.transforms import Affine2D
+from matplotlib import docstring
+
+_log = logging.getLogger(__name__)
 
 __author__ = "Kevin L. Davies"
 __credits__ = ["Yannick Copin"]
 __license__ = "BSD"
 __version__ = "2011/09/16"
-
-# Original version by Yannick Copin (ycopin@ipnl.in2p3.fr) 10/2/2010, available
-# at:
-#     http://matplotlib.org/examples/api/sankey_demo_old.html
-# Modifications by Kevin Davies (kld@alumni.carnegiemellon.edu) 6/3/2011:
-#   --Used arcs for the curves (so that the widths of the paths are uniform)
-#   --Converted the function to a class and created methods to join multiple
-#     simple Sankey diagrams
-#   --Provided handling for cases where the total of the inputs isn't 100
-#     Now, the default layout is based on the assumption that the inputs sum to
-#     1.  A scaling parameter can be used in other cases.
-#   --The call structure was changed to be more explicit about layout,
-#     including the length of the trunk, length of the paths, gap between the
-#     paths, and the margin around the diagram.
-#   --Allowed the lengths of paths to be adjusted individually, with an option
-#     to automatically justify them
-#   --The call structure was changed to make the specification of path
-#     orientation more flexible.  Flows are passed through one array, with
-#     inputs being positive and outputs being negative.  An orientation
-#     argument specifies the direction of the arrows.  The "main"
-#     inputs/outputs are now specified via an orientation of 0, and there may
-#     be several of each.
-#   --Added assertions to catch common calling errors
-#   --Added the physical unit as a string argument to be used in the labels, so
-#     that the values of the flows can usually be applied automatically
-#   --Added an argument for a minimum magnitude below which flows are not shown
-#   --Added a tapered trunk in the case that the flows do not sum to 0
-#   --Allowed the diagram to be rotated
-
-import numpy as np
-
-from matplotlib.cbook import iterable, Bunch
-from matplotlib.path import Path
-from matplotlib.patches import PathPatch
-from matplotlib.transforms import Affine2D
-from matplotlib import verbose
-from matplotlib import docstring
 
 # Angles [deg/90]
 RIGHT = 0
@@ -59,13 +29,13 @@ DOWN = 3
 
 class Sankey:
     """
-    Sankey diagram in matplotlib
+    Sankey diagram.
 
       Sankey diagrams are a specific type of flow diagram, in which
       the width of the arrows is shown proportionally to the flow
       quantity.  They are typically used to visualize energy or
       material or cost transfers between processes.
-      `Wikipedia (6/1/2011) <http://en.wikipedia.org/wiki/Sankey_diagram>`_
+      `Wikipedia (6/1/2011) <https://en.wikipedia.org/wiki/Sankey_diagram>`_
 
     """
 
@@ -139,29 +109,31 @@ class Sankey:
 
             Sankey().add().add...  .add().finish()
 
-        .. seealso::
+        See Also
+        --------
+        Sankey.add
+        Sankey.finish
 
-            :meth:`add`
-            :meth:`finish`
-
-
-        **Examples:**
-
-            .. plot:: mpl_examples/api/sankey_demo_basics.py
+        Examples
+        --------
+        .. plot:: gallery/specialty_plots/sankey_basics.py
         """
         # Check the arguments.
-        assert gap >= 0, (
-            "The gap is negative.\nThis isn't allowed because it "
-            "would cause the paths to overlap.")
-        assert radius <= gap, (
-            "The inner radius is greater than the path spacing.\n"
-            "This isn't allowed because it would cause the paths to overlap.")
-        assert head_angle >= 0, (
-            "The angle is negative.\nThis isn't allowed "
-            "because it would cause inputs to look like "
-            "outputs and vice versa.")
-        assert tolerance >= 0, (
-            "The tolerance is negative.\nIt must be a magnitude.")
+        if gap < 0:
+            raise ValueError(
+                "'gap' is negative, which is not allowed because it would "
+                "cause the paths to overlap")
+        if radius > gap:
+            raise ValueError(
+                "'radius' is greater than 'gap', which is not allowed because "
+                "it would cause the paths to overlap")
+        if head_angle < 0:
+            raise ValueError(
+                "'head_angle' is negative, which is not allowed because it "
+                "would cause inputs to look like outputs and vice versa")
+        if tolerance < 0:
+            raise ValueError(
+                "'tolerance' is negative, but it must be a magnitude")
 
         # Create axes if necessary.
         if ax is None:
@@ -217,7 +189,7 @@ class Sankey:
                      Path.CURVE4,
                      Path.CURVE4]
         # Vertices of a cubic Bezier curve approximating a 90 deg arc
-        # These can be determined by Path.arc(0,90).
+        # These can be determined by Path.arc(0, 90).
         ARC_VERTICES = np.array([[1.00000000e+00, 0.00000000e+00],
                                  [1.00000000e+00, 2.65114773e-01],
                                  [8.94571235e-01, 5.19642327e-01],
@@ -225,7 +197,7 @@ class Sankey:
                                  [5.19642327e-01, 8.94571235e-01],
                                  [2.65114773e-01, 1.00000000e+00],
                                  # Insignificant
-                                 #[6.12303177e-17, 1.00000000e+00]])
+                                 # [6.12303177e-17, 1.00000000e+00]])
                                  [0.00000000e+00, 1.00000000e+00]])
         if quadrant == 0 or quadrant == 2:
             if cw:
@@ -358,7 +330,7 @@ class Sankey:
 
     def _revert(self, path, first_action=Path.LINETO):
         """
-        A path is not simply revertable by path[::-1] since the code
+        A path is not simply reversible by path[::-1] since the code
         specifies an action to take from the **previous** point.
         """
         reverse_path = []
@@ -369,10 +341,10 @@ class Sankey:
         return reverse_path
         # This might be more efficient, but it fails because 'tuple' object
         # doesn't support item assignment:
-        #path[1] = path[1][-1:0:-1]
-        #path[1][0] = first_action
-        #path[2] = path[2][::-1]
-        #return path
+        # path[1] = path[1][-1:0:-1]
+        # path[1][0] = first_action
+        # path[2] = path[2][::-1]
+        # return path
 
     @docstring.dedent_interpd
     def add(self, patchlabel='', flows=None, orientations=None, labels='',
@@ -381,81 +353,84 @@ class Sankey:
         """
         Add a simple Sankey diagram with flows at the same hierarchical level.
 
-        Return value is the instance of :class:`Sankey`.
+        Parameters
+        ----------
+        patchlabel : str
+            Label to be placed at the center of the diagram.
+            Note that *label* (not *patchlabel*) can be passed as keyword
+            argument to create an entry in the legend.
 
-        Optional keyword arguments:
+        flows : list of float
+            Array of flow values.  By convention, inputs are positive and
+            outputs are negative.
 
-          ===============   ===================================================
-          Keyword           Description
-          ===============   ===================================================
-          *patchlabel*      label to be placed at the center of the diagram
-                            Note: *label* (not *patchlabel*) will be passed to
-                            the patch through ``**kwargs`` and can be used to
-                            create an entry in the legend.
-          *flows*           array of flow values
-                            By convention, inputs are positive and outputs are
-                            negative.
-          *orientations*    list of orientations of the paths
-                            Valid values are 1 (from/to the top), 0 (from/to
-                            the left or right), or -1 (from/to the bottom).  If
-                            *orientations* == 0, inputs will break in from the
-                            left and outputs will break away to the right.
-          *labels*          list of specifications of the labels for the flows
-                            Each value may be *None* (no labels), '' (just
-                            label the quantities), or a labeling string.  If a
-                            single value is provided, it will be applied to all
-                            flows.  If an entry is a non-empty string, then the
-                            quantity for the corresponding flow will be shown
-                            below the string.  However, if the *unit* of the
-                            main diagram is None, then quantities are never
-                            shown, regardless of the value of this argument.
-          *trunklength*     length between the bases of the input and output
-                            groups
-          *pathlengths*     list of lengths of the arrows before break-in or
-                            after break-away
-                            If a single value is given, then it will be applied
-                            to the first (inside) paths on the top and bottom,
-                            and the length of all other arrows will be
-                            justified accordingly.  The *pathlengths* are not
-                            applied to the horizontal inputs and outputs.
-          *prior*           index of the prior diagram to which this diagram
-                            should be connected
-          *connect*         a (prior, this) tuple indexing the flow of the
-                            prior diagram and the flow of this diagram which
-                            should be connected
-                            If this is the first diagram or *prior* is *None*,
-                            *connect* will be ignored.
-          *rotation*        angle of rotation of the diagram [deg]
-                            *rotation* is ignored if this diagram is connected
-                            to an existing one (using *prior* and *connect*).
-                            The interpretation of the *orientations* argument
-                            will be rotated accordingly (e.g., if *rotation*
-                            == 90, an *orientations* entry of 1 means to/from
-                            the left).
-          ===============   ===================================================
+            Flows are placed along the top of the diagram from the inside out
+            in order of their index within *flows*.  They are placed along the
+            sides of the diagram from the top down and along the bottom from
+            the outside in.
 
-        Valid kwargs are :meth:`matplotlib.patches.PathPatch` arguments:
+            If the sum of the inputs and outputs is
+            nonzero, the discrepancy will appear as a cubic Bezier curve along
+            the top and bottom edges of the trunk.
+
+        orientations : list of {-1, 0, 1}
+            List of orientations of the flows (or a single orientation to be
+            used for all flows).  Valid values are 0 (inputs from
+            the left, outputs to the right), 1 (from and to the top) or -1
+            (from and to the bottom).
+
+        labels : list of (str or None)
+            List of labels for the flows (or a single label to be used for all
+            flows).  Each label may be *None* (no label), or a labeling string.
+            If an entry is a (possibly empty) string, then the quantity for the
+            corresponding flow will be shown below the string.  However, if
+            the *unit* of the main diagram is None, then quantities are never
+            shown, regardless of the value of this argument.
+
+        trunklength : float
+            Length between the bases of the input and output groups (in
+            data-space units).
+
+        pathlengths : list of float
+            List of lengths of the vertical arrows before break-in or after
+            break-away.  If a single value is given, then it will be applied to
+            the first (inside) paths on the top and bottom, and the length of
+            all other arrows will be justified accordingly.  The *pathlengths*
+            are not applied to the horizontal inputs and outputs.
+
+        prior : int
+            Index of the prior diagram to which this diagram should be
+            connected.
+
+        connect : (int, int)
+            A (prior, this) tuple indexing the flow of the prior diagram and
+            the flow of this diagram which should be connected.  If this is the
+            first diagram or *prior* is *None*, *connect* will be ignored.
+
+        rotation : float
+            Angle of rotation of the diagram in degrees.  The interpretation of
+            the *orientations* argument will be rotated accordingly (e.g., if
+            *rotation* == 90, an *orientations* entry of 1 means to/from the
+            left).  *rotation* is ignored if this diagram is connected to an
+            existing one (using *prior* and *connect*).
+
+        Returns
+        -------
+        Sankey
+            The current `.Sankey` instance.
+
+        Other Parameters
+        ----------------
+        **kwargs
+           Additional keyword arguments set `matplotlib.patches.PathPatch`
+           properties, listed below.  For example, one may want to use
+           ``fill=False`` or ``label="A legend entry"``.
 
         %(Patch)s
 
-        As examples, ``fill=False`` and ``label='A legend entry'``.
-        By default, ``facecolor='#bfd1d4'`` (light blue) and
-        ``linewidth=0.5``.
-
-        The indexing parameters (*prior* and *connect*) are zero-based.
-
-        The flows are placed along the top of the diagram from the inside out
-        in order of their index within the *flows* list or array.  They are
-        placed along the sides of the diagram from the top down and along the
-        bottom from the outside in.
-
-        If the the sum of the inputs and outputs is nonzero, the discrepancy
-        will appear as a cubic Bezier curve along the top and bottom edges of
-        the trunk.
-
-        .. seealso::
-
-            :meth:`finish`
+        See Also
+        --------
+        Sankey.finish
         """
         # Check and preprocess the arguments.
         if flows is None:
@@ -469,65 +444,62 @@ class Sankey:
             # In the code below, angles are expressed in deg/90.
             rotation /= 90.0
         if orientations is None:
-            orientations = [0, 0]
-        assert len(orientations) == n, (
-            "orientations and flows must have the same length.\n"
-            "orientations has length %d, but flows has length %d."
-            % (len(orientations), n))
-        if labels != '' and getattr(labels, '__iter__', False):
-        # iterable() isn't used because it would give True if labels is a
-        # string
-            assert len(labels) == n, (
-                "If labels is a list, then labels and flows must have the "
-                "same length.\nlabels has length %d, but flows has length %d."
-                % (len(labels), n))
-        else:
-            labels = [labels] * n
-        assert trunklength >= 0, (
-            "trunklength is negative.\nThis isn't allowed, because it would "
-            "cause poor layout.")
-        if np.absolute(np.sum(flows)) > self.tolerance:
-            verbose.report(
-                "The sum of the flows is nonzero (%f).\nIs the "
-                "system not at steady state?" % np.sum(flows), 'helpful')
+            orientations = 0
+        try:
+            orientations = np.broadcast_to(orientations, n)
+        except ValueError:
+            raise ValueError(
+                f"The shapes of 'flows' {np.shape(flows)} and 'orientations' "
+                f"{np.shape(orientations)} are incompatible"
+            ) from None
+        try:
+            labels = np.broadcast_to(labels, n)
+        except ValueError:
+            raise ValueError(
+                f"The shapes of 'flows' {np.shape(flows)} and 'labels' "
+                f"{np.shape(labels)} are incompatible"
+            ) from None
+        if trunklength < 0:
+            raise ValueError(
+                "'trunklength' is negative, which is not allowed because it "
+                "would cause poor layout")
+        if abs(np.sum(flows)) > self.tolerance:
+            _log.info("The sum of the flows is nonzero (%f; patchlabel=%r); "
+                      "is the system not at steady state?",
+                      np.sum(flows), patchlabel)
         scaled_flows = self.scale * flows
         gain = sum(max(flow, 0) for flow in scaled_flows)
         loss = sum(min(flow, 0) for flow in scaled_flows)
-        if not (0.5 <= gain <= 2.0):
-            verbose.report(
-                "The scaled sum of the inputs is %f.\nThis may "
-                "cause poor layout.\nConsider changing the scale so"
-                " that the scaled sum is approximately 1.0." % gain, 'helpful')
-        if not (-2.0 <= loss <= -0.5):
-            verbose.report(
-                "The scaled sum of the outputs is %f.\nThis may "
-                "cause poor layout.\nConsider changing the scale so"
-                " that the scaled sum is approximately 1.0." % gain, 'helpful')
         if prior is not None:
-            assert prior >= 0, "The index of the prior diagram is negative."
-            assert min(connect) >= 0, (
-                "At least one of the connection indices is negative.")
-            assert prior < len(self.diagrams), (
-                "The index of the prior diagram is %d, but there are "
-                "only %d other diagrams.\nThe index is zero-based."
-                % (prior, len(self.diagrams)))
-            assert connect[0] < len(self.diagrams[prior].flows), (
-                "The connection index to the source diagram is %d, but "
-                "that diagram has only %d flows.\nThe index is zero-based."
-                % (connect[0], len(self.diagrams[prior].flows)))
-            assert connect[1] < n, (
-                "The connection index to this diagram is %d, but this diagram"
-                "has only %d flows.\n The index is zero-based."
-                % (connect[1], n))
-            assert self.diagrams[prior].angles[connect[0]] is not None, (
-                "The connection cannot be made.  Check that the magnitude "
-                "of flow %d of diagram %d is greater than or equal to the "
-                "specified tolerance." % (connect[0], prior))
+            if prior < 0:
+                raise ValueError("The index of the prior diagram is negative")
+            if min(connect) < 0:
+                raise ValueError(
+                    "At least one of the connection indices is negative")
+            if prior >= len(self.diagrams):
+                raise ValueError(
+                    f"The index of the prior diagram is {prior}, but there "
+                    f"are only {len(self.diagrams)} other diagrams")
+            if connect[0] >= len(self.diagrams[prior].flows):
+                raise ValueError(
+                    "The connection index to the source diagram is {}, but "
+                    "that diagram has only {} flows".format(
+                        connect[0], len(self.diagrams[prior].flows)))
+            if connect[1] >= n:
+                raise ValueError(
+                    f"The connection index to this diagram is {connect[1]}, "
+                    f"but this diagram has only {n} flows")
+            if self.diagrams[prior].angles[connect[0]] is None:
+                raise ValueError(
+                    f"The connection cannot be made, which may occur if the "
+                    f"magnitude of flow {connect[0]} of diagram {prior} is "
+                    f"less than the specified tolerance")
             flow_error = (self.diagrams[prior].flows[connect[0]] +
                           flows[connect[1]])
-            assert abs(flow_error) < self.tolerance, (
-                "The scaled sum of the connected flows is %f, which is not "
-                "within the tolerance (%f)." % (flow_error, self.tolerance))
+            if abs(flow_error) >= self.tolerance:
+                raise ValueError(
+                    f"The scaled sum of the connected flows is {flow_error}, "
+                    f"which is not within the tolerance ({self.tolerance})")
 
         # Determine if the flows are inputs.
         are_inputs = [None] * n
@@ -537,11 +509,10 @@ class Sankey:
             elif flow <= -self.tolerance:
                 are_inputs[i] = False
             else:
-                verbose.report(
-                    "The magnitude of flow %d (%f) is below the "
-                    "tolerance (%f).\nIt will not be shown, and it "
-                    "cannot be used in a connection."
-                    % (i, flow, self.tolerance), 'helpful')
+                _log.info(
+                    "The magnitude of flow %d (%f) is below the tolerance "
+                    "(%f).\nIt will not be shown, and it cannot be used in a "
+                    "connection.", i, flow, self.tolerance)
 
         # Determine the angles of the arrows (before rotation).
         angles = [None] * n
@@ -556,20 +527,21 @@ class Sankey:
                 if is_input is not None:
                     angles[i] = RIGHT
             else:
-                assert orient == -1, (
-                    "The value of orientations[%d] is %d, "
-                    "but it must be -1, 0, or 1." % (i, orient))
+                if orient != -1:
+                    raise ValueError(
+                        f"The value of orientations[{i}] is {orient}, "
+                        f"but it must be -1, 0, or 1")
                 if is_input:
                     angles[i] = UP
                 elif not is_input:
                     angles[i] = DOWN
 
         # Justify the lengths of the paths.
-        if iterable(pathlengths):
-            assert len(pathlengths) == n, (
-                "If pathlengths is a list, then pathlengths and flows must "
-                "have the same length.\npathlengths has length %d, but flows "
-                "has length %d." % (len(pathlengths), n))
+        if np.iterable(pathlengths):
+            if len(pathlengths) != n:
+                raise ValueError(
+                    f"The lengths of 'flows' ({n}) and 'pathlengths' "
+                    f"({len(pathlengths)}) are incompatible")
         else:  # Make pathlengths into a list.
             urlength = pathlengths
             ullength = pathlengths
@@ -590,7 +562,7 @@ class Sankey:
             # Determine the lengths of the bottom-side arrows
             # from the middle outwards.
             for i, (angle, is_input, flow) in enumerate(reversed(list(zip(
-                angles, are_inputs, scaled_flows)))):
+                  angles, are_inputs, scaled_flows)))):
                 if angle == UP and is_input:
                     pathlengths[n - i - 1] = lllength
                     lllength += flow
@@ -601,7 +573,7 @@ class Sankey:
             # from the bottom upwards.
             has_left_input = False
             for i, (angle, is_input, spec) in enumerate(reversed(list(zip(
-                angles, are_inputs, zip(scaled_flows, pathlengths))))):
+                  angles, are_inputs, zip(scaled_flows, pathlengths))))):
                 if angle == RIGHT:
                     if is_input:
                         if has_left_input:
@@ -612,7 +584,7 @@ class Sankey:
             # from the top downwards.
             has_right_output = False
             for i, (angle, is_input, spec) in enumerate(zip(
-                angles, are_inputs, list(zip(scaled_flows, pathlengths)))):
+                  angles, are_inputs, list(zip(scaled_flows, pathlengths)))):
                 if angle == RIGHT:
                     if not is_input:
                         if has_right_output:
@@ -656,7 +628,7 @@ class Sankey:
         label_locations = np.zeros((n, 2))
         # Add the top-side inputs and outputs from the middle outwards.
         for i, (angle, is_input, spec) in enumerate(zip(
-            angles, are_inputs, list(zip(scaled_flows, pathlengths)))):
+              angles, are_inputs, list(zip(scaled_flows, pathlengths)))):
             if angle == DOWN and is_input:
                 tips[i, :], label_locations[i, :] = self._add_input(
                     ulpath, angle, *spec)
@@ -665,7 +637,7 @@ class Sankey:
                     urpath, angle, *spec)
         # Add the bottom-side inputs and outputs from the middle outwards.
         for i, (angle, is_input, spec) in enumerate(reversed(list(zip(
-            angles, are_inputs, list(zip(scaled_flows, pathlengths)))))):
+              angles, are_inputs, list(zip(scaled_flows, pathlengths)))))):
             if angle == UP and is_input:
                 tip, label_location = self._add_input(llpath, angle, *spec)
                 tips[n - i - 1, :] = tip
@@ -677,7 +649,7 @@ class Sankey:
         # Add the left-side inputs from the bottom upwards.
         has_left_input = False
         for i, (angle, is_input, spec) in enumerate(reversed(list(zip(
-            angles, are_inputs, list(zip(scaled_flows, pathlengths)))))):
+              angles, are_inputs, list(zip(scaled_flows, pathlengths)))))):
             if angle == RIGHT and is_input:
                 if not has_left_input:
                     # Make sure the lower path extends
@@ -692,7 +664,7 @@ class Sankey:
         # Add the right-side outputs from the top downwards.
         has_right_output = False
         for i, (angle, is_input, spec) in enumerate(zip(
-            angles, are_inputs, list(zip(scaled_flows, pathlengths)))):
+              angles, are_inputs, list(zip(scaled_flows, pathlengths)))):
             if angle == RIGHT and not is_input:
                 if not has_right_output:
                     # Make sure the upper path extends
@@ -716,7 +688,7 @@ class Sankey:
                 [(Path.CLOSEPOLY, urpath[0][1])])
 
         # Create a patch with the Sankey outline.
-        codes, vertices = list(zip(*path))
+        codes, vertices = zip(*path)
         vertices = np.array(vertices)
 
         def _get_angle(a, r):
@@ -728,7 +700,7 @@ class Sankey:
         if prior is None:
             if rotation != 0:  # By default, none of this is needed.
                 angles = [_get_angle(angle, rotation) for angle in angles]
-                rotate = Affine2D().rotate_deg(rotation * 90).transform_point
+                rotate = Affine2D().rotate_deg(rotation * 90).transform_affine
                 tips = rotate(tips)
                 label_locations = rotate(label_locations)
                 vertices = rotate(vertices)
@@ -737,27 +709,24 @@ class Sankey:
             rotation = (self.diagrams[prior].angles[connect[0]] -
                         angles[connect[1]])
             angles = [_get_angle(angle, rotation) for angle in angles]
-            rotate = Affine2D().rotate_deg(rotation * 90).transform_point
+            rotate = Affine2D().rotate_deg(rotation * 90).transform_affine
             tips = rotate(tips)
             offset = self.diagrams[prior].tips[connect[0]] - tips[connect[1]]
-            translate = Affine2D().translate(*offset).transform_point
+            translate = Affine2D().translate(*offset).transform_affine
             tips = translate(tips)
             label_locations = translate(rotate(label_locations))
             vertices = translate(rotate(vertices))
             kwds = dict(s=patchlabel, ha='center', va='center')
             text = self.ax.text(*offset, **kwds)
-        if False:  # Debug
-            print("llpath\n", llpath)
-            print("ulpath\n", self._revert(ulpath))
-            print("urpath\n", urpath)
-            print("lrpath\n", self._revert(lrpath))
-            xs, ys = list(zip(*vertices))
-            self.ax.plot(xs, ys, 'go-')
-        patch = PathPatch(Path(vertices, codes),
-                          fc=kwargs.pop('fc', kwargs.pop('facecolor',
-                                        '#bfd1d4')),  # Custom defaults
-                          lw=kwargs.pop('lw', kwargs.pop('linewidth', 0.5)),
-                          **kwargs)
+        if mpl.rcParams['_internal.classic_mode']:
+            fc = kwargs.pop('fc', kwargs.pop('facecolor', '#bfd1d4'))
+            lw = kwargs.pop('lw', kwargs.pop('linewidth', 0.5))
+        else:
+            fc = kwargs.pop('fc', kwargs.pop('facecolor', None))
+            lw = kwargs.pop('lw', kwargs.pop('linewidth', None))
+        if fc is None:
+            fc = next(self.ax._get_patches_for_fill.prop_cycler)['color']
+        patch = PathPatch(Path(vertices, codes), fc=fc, lw=lw, **kwargs)
         self.ax.add_patch(patch)
 
         # Add the path labels.
@@ -795,8 +764,9 @@ class Sankey:
         # where either could determine the margins (e.g., arrow shoulders).
 
         # Add this diagram as a subdiagram.
-        self.diagrams.append(Bunch(patch=patch, flows=flows, angles=angles,
-                                   tips=tips, text=text, texts=texts))
+        self.diagrams.append(
+            SimpleNamespace(patch=patch, flows=flows, angles=angles, tips=tips,
+                            text=text, texts=texts))
 
         # Allow a daisy-chained call structure (see docstring for the class).
         return self
@@ -813,7 +783,7 @@ class Sankey:
           Field             Description
           ===============   ===================================================
           *patch*           Sankey outline (an instance of
-                            :class:`~maplotlib.patches.PathPatch`)
+                            :class:`~matplotlib.patches.PathPatch`)
           *flows*           values of the flows (positive for input, negative
                             for output)
           *angles*          list of angles of the arrows [deg/90]
@@ -836,9 +806,9 @@ class Sankey:
                             for the labels of flows
           ===============   ===================================================
 
-        .. seealso::
-
-            :meth:`add`
+        See Also
+        --------
+        Sankey.add
         """
         self.ax.axis([self.extent[0] - self.margin,
                       self.extent[1] + self.margin,

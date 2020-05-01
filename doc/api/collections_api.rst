@@ -1,12 +1,10 @@
-***********
-collections
-***********
+**************************
+``matplotlib.collections``
+**************************
 
 .. inheritance-diagram:: matplotlib.collections
    :parts: 2
-
-:mod:`matplotlib.collections`
-=============================
+   :private-bases:
 
 .. automodule:: matplotlib.collections
    :members:

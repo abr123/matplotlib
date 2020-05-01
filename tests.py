@@ -4,47 +4,26 @@
 #
 #   $ python tests.py -v -d
 #
-# The arguments are identical to the arguments accepted by nosetests.
+# The arguments are identical to the arguments accepted by pytest.
 #
-# See https://nose.readthedocs.org/ for a detailed description of
-# these options.
+# See http://doc.pytest.org/ for a detailed description of these options.
 
-import os
 import sys
-import time
+import argparse
 
-import matplotlib
-matplotlib.use('agg')
-
-import nose
-from matplotlib.testing.noseclasses import KnownFailure
-from matplotlib import default_test_modules
-
-from matplotlib import font_manager
-# Make sure the font caches are created before starting any possibly
-# parallel tests
-if font_manager._fmcache is not None:
-    while not os.path.exists(font_manager._fmcache):
-        time.sleep(0.5)
-
-plugins = [KnownFailure]
-
-# Nose doesn't automatically instantiate all of the plugins in the
-# child processes, so we have to provide the multiprocess plugin with
-# a list.
-from nose.plugins import multiprocess
-multiprocess._instantiate_plugins = plugins
-
-def run():
-    nose.main(addplugins=[x() for x in plugins],
-              defaultTest=default_test_modules)
 
 if __name__ == '__main__':
-    if '--no-pep8' in sys.argv:
-        default_test_modules.remove('matplotlib.tests.test_coding_standards')
-        sys.argv.remove('--no-pep8')
-    elif '--pep8' in sys.argv:
-        default_test_modules = ['matplotlib.tests.test_coding_standards']
-        sys.argv.remove('--pep8')
+    from matplotlib import test
 
-    run()
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('--recursionlimit', type=int, default=None,
+                        help='Specify recursionlimit for test run')
+    args, extra_args = parser.parse_known_args()
+
+    print('Python byte-compilation optimization level:', sys.flags.optimize)
+
+    if args.recursionlimit is not None:  # Will trigger deprecation.
+        retcode = test(argv=extra_args, recursionlimit=args.recursionlimit)
+    else:
+        retcode = test(argv=extra_args)
+    sys.exit(retcode)

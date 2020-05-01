@@ -1,15 +1,13 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
+import numpy as np
 
-import six
-
+from matplotlib import cbook
 from matplotlib.collections import PolyCollection, TriMesh
 from matplotlib.colors import Normalize
 from matplotlib.tri.triangulation import Triangulation
-import numpy as np
 
 
-def tripcolor(ax, *args, **kwargs):
+def tripcolor(ax, *args, alpha=1.0, norm=None, cmap=None, vmin=None,
+              vmax=None, shading='flat', facecolors=None, **kwargs):
     """
     Create a pseudocolor plot of an unstructured triangular grid.
 
@@ -17,8 +15,7 @@ def tripcolor(ax, *args, **kwargs):
 
       tripcolor(triangulation, ...)
 
-    where triangulation is a :class:`matplotlib.tri.Triangulation`
-    object, or
+    where triangulation is a `.Triangulation` object, or
 
     ::
 
@@ -28,9 +25,8 @@ def tripcolor(ax, *args, **kwargs):
       tripcolor(x, y, mask=mask, ...)
       tripcolor(x, y, triangles, mask=mask, ...)
 
-    in which case a Triangulation object will be created.  See
-    :class:`~matplotlib.tri.Triangulation` for a explanation of these
-    possibilities.
+    in which case a Triangulation object will be created.  See `.Triangulation`
+    for a explanation of these possibilities.
 
     The next argument must be *C*, the array of color values, either
     one per point in the triangulation if color values are defined at
@@ -38,32 +34,17 @@ def tripcolor(ax, *args, **kwargs):
     are defined at triangles. If there are the same number of points
     and triangles in the triangulation it is assumed that color
     values are defined at points; to force the use of color values at
-    triangles use the kwarg *facecolors*=C instead of just *C*.
+    triangles use the kwarg ``facecolors=C`` instead of just ``C``.
 
     *shading* may be 'flat' (the default) or 'gouraud'. If *shading*
     is 'flat' and C values are defined at points, the color values
     used for each triangle are from the mean C of the triangle's
     three points. If *shading* is 'gouraud' then color values must be
-    defined at points.  *shading* of 'faceted' is deprecated;
-    please use *edgecolors* instead.
+    defined at points.
 
-    The remaining kwargs are the same as for
-    :meth:`~matplotlib.axes.Axes.pcolor`.
-
-    **Example:**
-
-        .. plot:: mpl_examples/pylab_examples/tripcolor_demo.py
+    The remaining kwargs are the same as for `~.Axes.pcolor`.
     """
-    if not ax._hold:
-        ax.cla()
-
-    alpha = kwargs.pop('alpha', 1.0)
-    norm = kwargs.pop('norm', None)
-    cmap = kwargs.pop('cmap', None)
-    vmin = kwargs.pop('vmin', None)
-    vmax = kwargs.pop('vmax', None)
-    shading = kwargs.pop('shading', 'flat')
-    facecolors = kwargs.pop('facecolors', None)
+    cbook._check_in_list(['flat', 'gouraud'], shading=shading)
 
     tri, args, kwargs = Triangulation.get_from_args_and_kwargs(*args, **kwargs)
 
@@ -97,10 +78,7 @@ def tripcolor(ax, *args, **kwargs):
         kwargs['linewidths'] = kwargs.pop('linewidth')
     kwargs.setdefault('linewidths', linewidths)
 
-    if shading == 'faceted':   # Deprecated.
-        edgecolors = 'k'
-    else:
-        edgecolors = 'none'
+    edgecolors = 'none'
     if 'edgecolor' in kwargs:
         kwargs['edgecolors'] = kwargs.pop('edgecolor')
     ec = kwargs.setdefault('edgecolors', edgecolors)
@@ -122,8 +100,7 @@ def tripcolor(ax, *args, **kwargs):
     else:
         # Vertices of triangles.
         maskedTris = tri.get_masked_triangles()
-        verts = np.concatenate((tri.x[maskedTris][..., np.newaxis],
-                                tri.y[maskedTris][..., np.newaxis]), axis=2)
+        verts = np.stack((tri.x[maskedTris], tri.y[maskedTris]), axis=-1)
 
         # Color values.
         if facecolors is None:
@@ -131,20 +108,16 @@ def tripcolor(ax, *args, **kwargs):
             C = C[maskedTris].mean(axis=1)
         elif tri.mask is not None:
             # Remove color values of masked triangles.
-            C = C.compress(1-tri.mask)
+            C = C[~tri.mask]
 
         collection = PolyCollection(verts, **kwargs)
 
     collection.set_alpha(alpha)
     collection.set_array(C)
-    if norm is not None:
-        assert(isinstance(norm, Normalize))
+    cbook._check_isinstance((Normalize, None), norm=norm)
     collection.set_cmap(cmap)
     collection.set_norm(norm)
-    if vmin is not None or vmax is not None:
-        collection.set_clim(vmin, vmax)
-    else:
-        collection.autoscale_None()
+    collection._scale_norm(norm, vmin, vmax)
     ax.grid(False)
 
     minx = tri.x.min()

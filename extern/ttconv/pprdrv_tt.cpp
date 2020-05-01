@@ -24,13 +24,20 @@
 ** Last revised 19 December 1995.
 */
 
-#include "global_defines.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include "pprdrv.h"
 #include "truetype.h"
 #include <sstream>
+#ifdef _POSIX_C_SOURCE
+#    undef _POSIX_C_SOURCE
+#endif
+#ifndef _AIX
+#ifdef _XOPEN_SOURCE
+#    undef _XOPEN_SOURCE
+#endif
+#endif
 #include <Python.h>
 
 /*==========================================================================
@@ -122,7 +129,7 @@ BYTE *GetTable(struct TTFONT *font, const char *name)
     /* We must search the table directory. */
     ptr = font->offset_table + 12;
     x=0;
-    while (TRUE)
+    while (true)
     {
         if ( strncmp((const char*)ptr,name,4) == 0 )
         {
@@ -131,7 +138,7 @@ BYTE *GetTable(struct TTFONT *font, const char *name)
 
             offset = getULONG( ptr + 8 );
             length = getULONG( ptr + 12 );
-            table = (BYTE*)calloc( sizeof(BYTE), length );
+            table = (BYTE*)calloc( sizeof(BYTE), length + 2 );
 
             try
             {
@@ -154,6 +161,9 @@ BYTE *GetTable(struct TTFONT *font, const char *name)
                 free(table);
                 throw;
             }
+            /* Always NUL-terminate; add two in case of UTF16 strings. */
+            table[length] = '\0';
+            table[length + 1] = '\0';
             return table;
         }
 
@@ -236,7 +246,7 @@ void Read_name(struct TTFONT *font)
             {
                 font->Copyright = (char*)calloc(sizeof(char),length+1);
                 strncpy(font->Copyright,(const char*)strings+offset,length);
-                font->Copyright[length]=(char)NULL;
+                font->Copyright[length]='\0';
                 replace_newlines_with_spaces(font->Copyright);
 
 #ifdef DEBUG_TRUETYPE
@@ -252,7 +262,7 @@ void Read_name(struct TTFONT *font)
                 free(font->FamilyName);
                 font->FamilyName = (char*)calloc(sizeof(char),length+1);
                 strncpy(font->FamilyName,(const char*)strings+offset,length);
-                font->FamilyName[length]=(char)NULL;
+                font->FamilyName[length]='\0';
                 replace_newlines_with_spaces(font->FamilyName);
 
 #ifdef DEBUG_TRUETYPE
@@ -268,7 +278,7 @@ void Read_name(struct TTFONT *font)
                 free(font->Style);
                 font->Style = (char*)calloc(sizeof(char),length+1);
                 strncpy(font->Style,(const char*)strings+offset,length);
-                font->Style[length]=(char)NULL;
+                font->Style[length]='\0';
                 replace_newlines_with_spaces(font->Style);
 
 #ifdef DEBUG_TRUETYPE
@@ -284,7 +294,7 @@ void Read_name(struct TTFONT *font)
                 free(font->FullName);
                 font->FullName = (char*)calloc(sizeof(char),length+1);
                 strncpy(font->FullName,(const char*)strings+offset,length);
-                font->FullName[length]=(char)NULL;
+                font->FullName[length]='\0';
                 replace_newlines_with_spaces(font->FullName);
 
 #ifdef DEBUG_TRUETYPE
@@ -300,7 +310,7 @@ void Read_name(struct TTFONT *font)
                 free(font->Version);
                 font->Version = (char*)calloc(sizeof(char),length+1);
                 strncpy(font->Version,(const char*)strings+offset,length);
-                font->Version[length]=(char)NULL;
+                font->Version[length]='\0';
                 replace_newlines_with_spaces(font->Version);
 
 #ifdef DEBUG_TRUETYPE
@@ -316,7 +326,7 @@ void Read_name(struct TTFONT *font)
                 free(font->PostName);
                 font->PostName = (char*)calloc(sizeof(char),length+1);
                 strncpy(font->PostName,(const char*)strings+offset,length);
-                font->PostName[length]=(char)NULL;
+                font->PostName[length]='\0';
                 replace_newlines_with_spaces(font->PostName);
 
 #ifdef DEBUG_TRUETYPE
@@ -331,7 +341,7 @@ void Read_name(struct TTFONT *font)
                 free(font->PostName);
                 font->PostName = (char*)calloc(sizeof(char),length+1);
                 utf16be_to_ascii(font->PostName, (char *)strings+offset, length);
-                font->PostName[length/2]=(char)NULL;
+                font->PostName[length/2]='\0';
                 replace_newlines_with_spaces(font->PostName);
 
 #ifdef DEBUG_TRUETYPE
@@ -346,7 +356,7 @@ void Read_name(struct TTFONT *font)
             {
                 font->Trademark = (char*)calloc(sizeof(char),length+1);
                 strncpy(font->Trademark,(const char*)strings+offset,length);
-                font->Trademark[length]=(char)NULL;
+                font->Trademark[length]='\0';
                 replace_newlines_with_spaces(font->Trademark);
 
 #ifdef DEBUG_TRUETYPE
@@ -548,7 +558,7 @@ void ttfont_FontInfo(TTStreamWriter& stream, struct TTFONT *font)
 -------------------------------------------------------------------*/
 int string_len;
 int line_len;
-int in_string;
+bool in_string;
 
 /*
 ** This is called once at the start.
@@ -556,7 +566,7 @@ int in_string;
 void sfnts_start(TTStreamWriter& stream)
 {
     stream.puts("/sfnts[<");
-    in_string=TRUE;
+    in_string=true;
     string_len=0;
     line_len=8;
 } /* end of sfnts_start() */
@@ -573,7 +583,7 @@ void sfnts_pputBYTE(TTStreamWriter& stream, BYTE n)
         stream.put_char('<');
         string_len=0;
         line_len++;
-        in_string=TRUE;
+        in_string=true;
     }
 
     stream.put_char( hexdigits[ n / 16 ] );
@@ -639,7 +649,7 @@ void sfnts_end_string(TTStreamWriter& stream)
         stream.put_char('>');
         line_len++;
     }
-    in_string=FALSE;
+    in_string=false;
 } /* end of sfnts_end_string() */
 
 /*
@@ -1032,7 +1042,7 @@ const char *ttfont_CharStrings_getname(struct TTFONT *font, int charindex)
         }
 
         strncpy(temp,ptr,len);  /* Copy the pascal string into */
-        temp[len]=(char)NULL;   /* a buffer and make it ASCIIz. */
+        temp[len]='\0';   /* a buffer and make it ASCIIz. */
 
         return temp;
     }
@@ -1049,7 +1059,9 @@ void ttfont_CharStrings(TTStreamWriter& stream, struct TTFONT *font, std::vector
     post_format = getFixed( font->post_table );
 
     /* Emmit the start of the PostScript code to define the dictionary. */
-    stream.printf("/CharStrings %d dict dup begin\n", glyph_ids.size());
+    stream.printf("/CharStrings %d dict dup begin\n", glyph_ids.size()+1);
+    /* Section 5.8.2 table 5.7 of the PS Language Ref says a CharStrings dictionary must contain an entry for .notdef */
+    stream.printf("/.notdef 0 def\n");
 
     /* Emmit one key-value pair for each glyph. */
     for (std::vector<int>::const_iterator i = glyph_ids.begin();
@@ -1096,7 +1108,7 @@ void ttfont_trailer(TTStreamWriter& stream, struct TTFONT *font)
 
         stream.put_char('\n');
 
-        /* This proceedure is for compatiblity with */
+        /* This proceedure is for compatibility with */
         /* level 1 interpreters. */
         stream.putline("/BuildChar {");
         stream.putline(" 1 index /Encoding get exch get");

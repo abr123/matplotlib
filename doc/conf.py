@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-#
 # Matplotlib documentation build configuration file, created by
 # sphinx-quickstart on Fri May  2 12:33:25 2008.
 #
@@ -12,48 +10,150 @@
 # serve to show the default value.
 
 import os
+import shutil
+import subprocess
 import sys
+
+import matplotlib
 import sphinx
+
+from datetime import datetime
 
 # If your extensions are in another directory, add it here. If the directory
 # is relative to the documentation root, use os.path.abspath to make it
 # absolute, like shown here.
 sys.path.append(os.path.abspath('.'))
+sys.path.append('.')
 
 # General configuration
 # ---------------------
 
-# Add any Sphinx extension module names here, as strings. They can be extensions
-# coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-extensions = ['matplotlib.sphinxext.mathmpl', 'sphinxext.math_symbol_table',
-              'sphinx.ext.autodoc', 'matplotlib.sphinxext.only_directives',
-              'sphinx.ext.doctest', 'sphinx.ext.autosummary',
-              'matplotlib.sphinxext.plot_directive',
-              'sphinx.ext.inheritance_diagram',
-              'sphinxext.gen_gallery', 'sphinxext.gen_rst',
-              'sphinxext.github',
-              'numpydoc']
+# Strip backslahes in function's signature
+# To be removed when numpydoc > 0.9.x
+strip_signature_backslash = True
+
+# Add any Sphinx extension module names here, as strings. They can be
+# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
+extensions = [
+    'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
+    'sphinx.ext.doctest',
+    'sphinx.ext.inheritance_diagram',
+    'sphinx.ext.intersphinx',
+    'sphinx.ext.ifconfig',
+    'sphinx.ext.viewcode',
+    'IPython.sphinxext.ipython_console_highlighting',
+    'IPython.sphinxext.ipython_directive',
+    'numpydoc',  # Needs to be loaded *after* autodoc.
+    'sphinx_gallery.gen_gallery',
+    'matplotlib.sphinxext.mathmpl',
+    'matplotlib.sphinxext.plot_directive',
+    'sphinxext.custom_roles',
+    'sphinxext.github',
+    'sphinxext.math_symbol_table',
+    'sphinxext.missing_references',
+    'sphinxext.mock_gui_toolkits',
+    'sphinxext.skip_deprecated',
+    'sphinx_copybutton',
+]
+
+exclude_patterns = ['api/api_changes/*', 'users/whats_new/*']
 
 
-# Use IPython's console highlighting by default
-try:
-    from IPython.sphinxext import ipython_console_highlighting
-except ImportError:
-    extensions.append('matplotlib.sphinxext.ipython_console_highlighting')
-else:
-    print("Using IPython's ipython_console_highlighting directive")
-    extensions.append('IPython.sphinxext.ipython_console_highlighting')
+def _check_dependencies():
+    names = {
+        "colorspacious": 'colorspacious',
+        "IPython.sphinxext.ipython_console_highlighting": 'ipython',
+        "matplotlib": 'matplotlib',
+        "numpydoc": 'numpydoc',
+        "PIL.Image": 'pillow',
+        "sphinx_copybutton": 'sphinx_copybutton',
+        "sphinx_gallery": 'sphinx_gallery',
+    }
+    missing = []
+    for name in names:
+        try:
+            __import__(name)
+        except ImportError:
+            missing.append(names[name])
+    if missing:
+        raise ImportError(
+            "The following dependencies are missing to build the "
+            "documentation: {}".format(", ".join(missing)))
+    if shutil.which('dot') is None:
+        raise OSError(
+            "No binary named dot - graphviz must be installed to build the "
+            "documentation")
 
-try:
-    import numpydoc
-except ImportError:
-    raise ImportError("No module named numpydoc - you need to install "
-                      "numpydoc to build the documentation.")
+_check_dependencies()
 
+
+# Import only after checking for dependencies.
+# gallery_order.py from the sphinxext folder provides the classes that
+# allow custom ordering of sections and subsections of the gallery
+import sphinxext.gallery_order as gallery_order
+# The following import is only necessary to monkey patch the signature later on
+from sphinx_gallery import gen_rst
+
+# On Linux, prevent plt.show() from emitting a non-GUI backend warning.
+os.environ.pop("DISPLAY", None)
 
 autosummary_generate = True
 
 autodoc_docstring_signature = True
+if sphinx.version_info < (1, 8):
+    autodoc_default_flags = ['members', 'undoc-members']
+else:
+    autodoc_default_options = {'members': None, 'undoc-members': None}
+
+# missing-references names matches sphinx>=3 behavior, so we can't be nitpicky
+# for older sphinxes.
+nitpicky = sphinx.version_info >= (3,)
+# change this to True to update the allowed failures
+missing_references_write_json = False
+missing_references_warn_unused_ignores = False
+
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3', None),
+    'cycler': ('https://matplotlib.org/cycler', None),
+    'dateutil': ('https://dateutil.readthedocs.io/en/stable/', None),
+    'numpy': ('https://docs.scipy.org/doc/numpy/', None),
+    'pandas': ('https://pandas.pydata.org/pandas-docs/stable/', None),
+    'Pillow': ('https://pillow.readthedocs.io/en/stable/', None),
+    'pytest': ('https://pytest.org/en/stable', None),
+    'scipy': ('https://docs.scipy.org/doc/scipy/reference/', None),
+}
+
+
+# Sphinx gallery configuration
+sphinx_gallery_conf = {
+    'examples_dirs': ['../examples', '../tutorials'],
+    'filename_pattern': '^((?!sgskip).)*$',
+    'gallery_dirs': ['gallery', 'tutorials'],
+    'doc_module': ('matplotlib', 'mpl_toolkits'),
+    'reference_url': {
+        'matplotlib': None,
+        'numpy': 'https://docs.scipy.org/doc/numpy',
+        'scipy': 'https://docs.scipy.org/doc/scipy/reference',
+    },
+    'backreferences_dir': 'api/_as_gen',
+    'subsection_order': gallery_order.sectionorder,
+    'within_subsection_order': gallery_order.subsectionorder,
+    'remove_config_comments': True,
+    'min_reported_time': 1,
+}
+
+plot_gallery = 'True'
+
+# Monkey-patching gallery signature to include search keywords
+gen_rst.SPHX_GLR_SIG = """\n
+.. only:: html
+
+ .. rst-class:: sphx-glr-signature
+
+    Keywords: matplotlib code example, codex, python plot, pyplot
+    `Gallery generated by Sphinx-Gallery
+    <https://sphinx-gallery.readthedocs.io>`_\n"""
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -68,18 +168,26 @@ source_encoding = "utf-8"
 master_doc = 'contents'
 
 # General substitutions.
+try:
+    SHA = subprocess.check_output(
+        ['git', 'describe', '--dirty']).decode('utf-8').strip()
+# Catch the case where git is not installed locally, and use the versioneer
+# version number instead
+except (subprocess.CalledProcessError, FileNotFoundError):
+    SHA = matplotlib.__version__
+
+html_context = {'sha': SHA}
+
 project = 'Matplotlib'
-copyright = '2002 - 2012 John Hunter, Darren Dale, Eric Firing, Michael Droettboom and the matplotlib development team; 2012 - 2014 The matplotlib development team'
+copyright = ('2002 - 2012 John Hunter, Darren Dale, Eric Firing, '
+             'Michael Droettboom and the Matplotlib development '
+             f'team; 2012 - {datetime.now().year} The Matplotlib development team')
+
 
 # The default replacements for |version| and |release|, also used in various
 # other places throughout the built documents.
 #
 # The short X.Y version.
-try:
-    import matplotlib
-except ImportError:
-    msg = "Error: matplotlib must be installed before building the documentation"
-    sys.exit(msg)
 
 version = matplotlib.__version__
 # The full version, including alpha/beta/rc tags.
@@ -113,34 +221,11 @@ default_role = 'obj'
 # Plot directive configuration
 # ----------------------------
 
-plot_formats = [('png', 80), ('hires.png', 200), ('pdf', 50)]
+plot_formats = [('png', 100), ('pdf', 100)]
 
-# Subdirectories in 'examples/' directory of package and titles for gallery
-mpl_example_sections = (
-    ('lines_bars_and_markers', 'Lines, bars, and markers'),
-    ('shapes_and_collections', 'Shapes and collections'),
-    ('statistics', 'Statistical plots'),
-    ('images_contours_and_fields', 'Images, contours, and fields'),
-    ('pie_and_polar_charts', 'Pie and polar charts'),
-    ('color', 'Color'),
-    ('text_labels_and_annotations', 'Text, labels, and annotations'),
-    ('ticks_and_spines', 'Ticks and spines'),
-    ('subplots_axes_and_figures', 'Subplots, axes, and figures'),
-    ('style_sheets', 'Style sheets'),
-    ('specialty_plots', 'Specialty plots'),
-    ('showcase', 'Showcase'),
-    ('api', 'API'),
-    ('pylab_examples', 'pylab examples'),
-    ('mplot3d', 'mplot3d toolkit'),
-    ('axes_grid', 'axes_grid toolkit'),
-    ('units', 'units'),
-    ('widgets', 'widgets'),
-    )
+# GitHub extension
 
-
-# Github extension
-
-github_project_url = "http://github.com/matplotlib/matplotlib/"
+github_project_url = "https://github.com/matplotlib/matplotlib/"
 
 # Options for HTML output
 # -----------------------
@@ -149,7 +234,7 @@ github_project_url = "http://github.com/matplotlib/matplotlib/"
 # must exist either in Sphinx' static/ path, or in one of the custom paths
 # given in html_static_path.
 #html_style = 'matplotlib.css'
-html_style = 'mpl.css'
+html_style = f'mpl.css?{SHA}'
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
@@ -172,10 +257,6 @@ html_file_suffix = '.html'
 # using the given strftime format.
 html_last_updated_fmt = '%b %d, %Y'
 
-# If true, SmartyPants will be used to convert quotes and dashes to
-# typographically correct entities.
-#html_use_smartypants = True
-
 # Content template for the index page.
 html_index = 'index.html'
 
@@ -183,15 +264,13 @@ html_index = 'index.html'
 #html_sidebars = {}
 
 # Custom sidebar templates, maps page names to templates.
-html_sidebars = {'index': 'indexsidebar.html',
-                 }
-
-
-# Additional templates that should be rendered to pages, maps page names to
-# template names.
-html_additional_pages = {'index': 'index.html',
-                         'gallery':'gallery.html',
-                         'citing': 'citing.html'}
+html_sidebars = {
+    'index': [
+        # 'sidebar_announcement.html',
+        'sidebar_versions.html',
+        'donate_sidebar.html'],
+    '**': ['localtoc.html', 'relations.html', 'pagesource.html']
+}
 
 # If false, no module index is generated.
 #html_use_modindex = True
@@ -207,6 +286,11 @@ html_use_opensearch = 'False'
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'Matplotlibdoc'
 
+# Use typographic quote characters.
+smartquotes = False
+
+# Path to favicon
+html_favicon = '_static/favicon.ico'
 
 # Options for LaTeX output
 # ------------------------
@@ -214,16 +298,13 @@ htmlhelp_basename = 'Matplotlibdoc'
 # The paper size ('letter' or 'a4').
 latex_paper_size = 'letter'
 
-# The font size ('10pt', '11pt' or '12pt').
-latex_font_size = '11pt'
-
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, document class [howto/manual]).
 
 latex_documents = [
-  ('contents', 'Matplotlib.tex', 'Matplotlib',
-   'John Hunter, Darren Dale, Eric Firing, Michael Droettboom and the '
-   'matplotlib development team', 'manual'),
+    ('contents', 'Matplotlib.tex', 'Matplotlib',
+     'John Hunter\\and Darren Dale\\and Eric Firing\\and Michael Droettboom'
+     '\\and and the matplotlib development team', 'manual'),
 ]
 
 
@@ -231,8 +312,12 @@ latex_documents = [
 # the title page.
 latex_logo = None
 
+latex_elements = {}
 # Additional stuff for the LaTeX preamble.
-latex_preamble =r"""
+latex_elements['preamble'] = r"""
+   % One line per author on title page
+   \DeclareRobustCommand{\and}%
+     {\end{tabular}\kern-\tabcolsep\\\begin{tabular}[t]{c}}%
    % In the parameters section, place a newline after the Parameters
    % header.  (This is stolen directly from Numpy's conf.py, since it
    % affects Numpy-style docstrings).
@@ -252,6 +337,7 @@ latex_preamble =r"""
    \usepackage{enumitem}
    \setlistdepth{2048}
 """
+latex_elements['pointsize'] = '11pt'
 
 # Documents to append as an appendix to all manuals.
 latex_appendices = []
@@ -259,24 +345,45 @@ latex_appendices = []
 # If false, no module index is generated.
 latex_use_modindex = True
 
-latex_use_parts = True
+if hasattr(sphinx, 'version_info') and sphinx.version_info[:2] >= (1, 4):
+    latex_toplevel_sectioning = 'part'
+else:
+    latex_use_parts = True
 
 # Show both class-level docstring and __init__ docstring in class
 # documentation
 autoclass_content = 'both'
 
-rst_epilog = """
-.. |minimum_numpy_version| replace:: %s
-""" % matplotlib.__version__numpy__
-
 texinfo_documents = [
-  ("contents", 'matplotlib', 'Matplotlib Documentation',
-   'John Hunter@*Darren Dale@*Eric Firing@*Michael Droettboom@*'
-   'The matplotlib development team',
-   'Matplotlib', "Python plotting package", 'Programming',
-   1),
+    ("contents", 'matplotlib', 'Matplotlib Documentation',
+     'John Hunter@*Darren Dale@*Eric Firing@*Michael Droettboom@*'
+     'The matplotlib development team',
+     'Matplotlib', "Python plotting package", 'Programming',
+     1),
 ]
 
+# numpydoc config
 
-################# numpydoc config ####################
 numpydoc_show_class_members = False
+
+latex_engine = 'xelatex'  # or 'lualatex'
+
+latex_elements = {
+    'babel': r'\usepackage{babel}',
+    'fontpkg': r'\setmainfont{DejaVu Serif}',
+}
+
+html4_writer = True
+
+inheritance_node_attrs = dict(fontsize=16)
+
+graphviz_dot = shutil.which('dot')
+graphviz_output_format = 'svg'
+
+
+def setup(app):
+    if any(st in version for st in ('post', 'alpha', 'beta')):
+        bld_type = 'dev'
+    else:
+        bld_type = 'rel'
+    app.add_config_value('releaselevel', bld_type, 'env')

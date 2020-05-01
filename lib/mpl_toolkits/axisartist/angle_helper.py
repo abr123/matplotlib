@@ -1,80 +1,56 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
-import six
-
-from math import floor
-
 import numpy as np
 import math
 
-A = np.array
-
+from matplotlib import cbook
 from mpl_toolkits.axisartist.grid_finder import ExtremeFinderSimple
+
 
 def select_step_degree(dv):
 
     degree_limits_ = [1.5, 3, 7, 13, 20, 40, 70, 120, 270, 520]
-    degree_steps_  = [  1, 2, 5, 10, 15, 30, 45,  90, 180, 360]
+    degree_steps_  = [1,   2, 5, 10, 15, 30, 45,  90, 180, 360]
     degree_factors = [1.] * len(degree_steps_)
 
     minsec_limits_ = [1.5, 2.5, 3.5, 8, 11, 18, 25, 45]
     minsec_steps_  = [1,   2,   3,   5, 10, 15, 20, 30]
 
-    minute_limits_ = A(minsec_limits_)*(1./60.)
+    minute_limits_ = np.array(minsec_limits_) / 60
     minute_factors = [60.] * len(minute_limits_)
 
-    second_limits_ = A(minsec_limits_)*(1./3600.)
+    second_limits_ = np.array(minsec_limits_) / 3600
     second_factors = [3600.] * len(second_limits_)
 
-    degree_limits = np.concatenate([second_limits_,
-                                    minute_limits_,
-                                    degree_limits_])
+    degree_limits = [*second_limits_, *minute_limits_, *degree_limits_]
+    degree_steps = [*minsec_steps_, *minsec_steps_, *degree_steps_]
+    degree_factors = [*second_factors, *minute_factors, *degree_factors]
 
-    degree_steps = np.concatenate([minsec_steps_,
-                                   minsec_steps_,
-                                   degree_steps_])
-
-    degree_factors = np.concatenate([second_factors,
-                                     minute_factors,
-                                     degree_factors])
-
-    n = degree_limits.searchsorted(dv)
+    n = np.searchsorted(degree_limits, dv)
     step = degree_steps[n]
     factor = degree_factors[n]
 
     return step, factor
 
 
-
 def select_step_hour(dv):
 
     hour_limits_ = [1.5, 2.5, 3.5, 5, 7, 10, 15, 21, 36]
-    hour_steps_  = [1,   2  , 3,   4, 6,  8, 12, 18, 24]
+    hour_steps_  = [1,   2,   3,   4, 6,  8, 12, 18, 24]
     hour_factors = [1.] * len(hour_steps_)
 
     minsec_limits_ = [1.5, 2.5, 3.5, 4.5, 5.5, 8, 11, 14, 18, 25, 45]
     minsec_steps_  = [1,   2,   3,   4,   5,   6, 10, 12, 15, 20, 30]
 
-    minute_limits_ = A(minsec_limits_)*(1./60.)
+    minute_limits_ = np.array(minsec_limits_) / 60
     minute_factors = [60.] * len(minute_limits_)
 
-    second_limits_ = A(minsec_limits_)*(1./3600.)
+    second_limits_ = np.array(minsec_limits_) / 3600
     second_factors = [3600.] * len(second_limits_)
 
-    hour_limits = np.concatenate([second_limits_,
-                                  minute_limits_,
-                                  hour_limits_])
+    hour_limits = [*second_limits_, *minute_limits_, *hour_limits_]
+    hour_steps = [*minsec_steps_, *minsec_steps_, *hour_steps_]
+    hour_factors = [*second_factors, *minute_factors, *hour_factors]
 
-    hour_steps = np.concatenate([minsec_steps_,
-                                 minsec_steps_,
-                                 hour_steps_])
-
-    hour_factors = np.concatenate([second_factors,
-                                   minute_factors,
-                                   hour_factors])
-
-    n = hour_limits.searchsorted(dv)
+    n = np.searchsorted(hour_limits, dv)
     step = hour_steps[n]
     factor = hour_factors[n]
 
@@ -107,7 +83,7 @@ def select_step(v1, v2, nv, hour=False, include_last=True,
     if v1 > v2:
         v1, v2 = v2, v1
 
-    dv = float(v2 - v1) / nv
+    dv = (v2 - v1) / nv
 
     if hour:
         _select_step = select_step_hour
@@ -117,19 +93,16 @@ def select_step(v1, v2, nv, hour=False, include_last=True,
         cycle = 360.
 
     # for degree
-    if dv > 1./threshold_factor:
-        #print "degree"
+    if dv > 1 / threshold_factor:
         step, factor = _select_step(dv)
     else:
         step, factor = select_step_sub(dv*threshold_factor)
-        #print "feac", step, factor
 
         factor = factor * threshold_factor
 
-
-    f1, f2, fstep = v1*factor, v2*factor, step/factor
-    levs = np.arange(math.floor(f1/step), math.ceil(f2/step)+0.5,
-                     1, dtype="i") * step
+    levs = np.arange(np.floor(v1 * factor / step),
+                     np.ceil(v2 * factor / step) + 0.5,
+                     dtype=int) * step
 
     # n : number of valid levels. If there is a cycle, e.g., [0, 90, 180,
     # 270, 360], the grid line needs to be extended from 0 to 360, so
@@ -138,11 +111,10 @@ def select_step(v1, v2, nv, hour=False, include_last=True,
 
     n = len(levs)
 
-
     # we need to check the range of values
     # for example, -90 to 90, 0 to 360,
 
-    if factor == 1. and (levs[-1] >= levs[0]+cycle): # check for cycle
+    if factor == 1. and levs[-1] >= levs[0] + cycle:  # check for cycle
         nv = int(cycle / step)
         if include_last:
             levs = levs[0] + np.arange(0, nv+1, 1) * step
@@ -155,11 +127,12 @@ def select_step(v1, v2, nv, hour=False, include_last=True,
 
 
 def select_step24(v1, v2, nv, include_last=True, threshold_factor=3600):
-    v1, v2 = v1/15., v2/15.
-    levs, n, factor =  select_step(v1, v2, nv, hour=True,
-                                   include_last=include_last,
-                                   threshold_factor=threshold_factor)
-    return levs*15., n, factor
+    v1, v2 = v1 / 15, v2 / 15
+    levs, n, factor = select_step(v1, v2, nv, hour=True,
+                                  include_last=include_last,
+                                  threshold_factor=threshold_factor)
+    return levs * 15, n, factor
+
 
 def select_step360(v1, v2, nv, include_last=True, threshold_factor=3600):
     return select_step(v1, v2, nv, hour=False,
@@ -167,78 +140,75 @@ def select_step360(v1, v2, nv, include_last=True, threshold_factor=3600):
                        threshold_factor=threshold_factor)
 
 
-
-class LocatorBase(object):
-    def __init__(self, den, include_last=True):
-        self.den = den
+class LocatorBase:
+    @cbook._rename_parameter("3.3", "den", "nbins")
+    def __init__(self, nbins, include_last=True):
+        self.nbins = nbins
         self._include_last = include_last
 
-    def _get_nbins(self):
-        return self.den
+    @cbook.deprecated("3.3", alternative="nbins")
+    @property
+    def den(self):
+        return self.nbins
 
-    def _set_nbins(self, v):
-        self.den = v
+    @den.setter
+    def den(self, v):
+        self.nbins = v
 
-    nbins = property(_get_nbins, _set_nbins)
-
-    def set_params(self, **kwargs):
-        if "nbins" in kwargs:
-            self.den = int(kwargs.pop("nbins"))
-
-        if kwargs:
-            raise ValueError("Following keys are not processed: %s" % \
-                             ", ".join([str(k) for k in kwargs.keys()]))
+    def set_params(self, nbins=None):
+        if nbins is not None:
+            self.nbins = int(nbins)
 
 
 class LocatorHMS(LocatorBase):
     def __call__(self, v1, v2):
-        return select_step24(v1, v2, self.den, self._include_last)
+        return select_step24(v1, v2, self.nbins, self._include_last)
+
 
 class LocatorHM(LocatorBase):
     def __call__(self, v1, v2):
-        return select_step24(v1, v2, self.den, self._include_last,
+        return select_step24(v1, v2, self.nbins, self._include_last,
                              threshold_factor=60)
+
 
 class LocatorH(LocatorBase):
     def __call__(self, v1, v2):
-        return select_step24(v1, v2, self.den, self._include_last,
+        return select_step24(v1, v2, self.nbins, self._include_last,
                              threshold_factor=1)
 
 
 class LocatorDMS(LocatorBase):
     def __call__(self, v1, v2):
-        return select_step360(v1, v2, self.den, self._include_last)
+        return select_step360(v1, v2, self.nbins, self._include_last)
+
 
 class LocatorDM(LocatorBase):
     def __call__(self, v1, v2):
-        return select_step360(v1, v2, self.den, self._include_last,
+        return select_step360(v1, v2, self.nbins, self._include_last,
                               threshold_factor=60)
+
 
 class LocatorD(LocatorBase):
     def __call__(self, v1, v2):
-        return select_step360(v1, v2, self.den, self._include_last,
+        return select_step360(v1, v2, self.nbins, self._include_last,
                               threshold_factor=1)
 
 
+class FormatterDMS:
+    deg_mark = r"^{\circ}"
+    min_mark = r"^{\prime}"
+    sec_mark = r"^{\prime\prime}"
 
-class FormatterDMS(object):
+    fmt_d = "$%d" + deg_mark + "$"
+    fmt_ds = r"$%d.%s" + deg_mark + "$"
 
-    deg_mark = "^{\circ}"
-    min_mark = "^{\prime}"
-    sec_mark = "^{\prime\prime}"
+    # %s for sign
+    fmt_d_m = r"$%s%d" + deg_mark + r"\,%02d" + min_mark + "$"
+    fmt_d_ms = r"$%s%d" + deg_mark + r"\,%02d.%s" + min_mark + "$"
 
-    fmt_d = "$%d"+deg_mark+"$"
-    fmt_ds = r"$%d.\!\!"+deg_mark+"%s$"
-
-    # %s for signe
-    fmt_d_m = r"$%s%d"+deg_mark+"\,%02d"+min_mark+"$"
-    fmt_d_ms = r"$%s%d"+deg_mark+"\,%02d.\mkern-4mu"+min_mark+"%s$"
-
-
-    fmt_d_m_partial = "$%s%d"+deg_mark+"\,%02d"+min_mark+"\,"
-    fmt_s_partial = "%02d"+sec_mark+"$"
-    fmt_ss_partial = "%02d.\!\!"+sec_mark+"%s$"
-
+    fmt_d_m_partial = "$%s%d" + deg_mark + r"\,%02d" + min_mark + r"\,"
+    fmt_s_partial = "%02d" + sec_mark + "$"
+    fmt_ss_partial = "%02d.%s" + sec_mark + "$"
 
     def _get_number_fraction(self, factor):
         ## check for fractional numbers
@@ -250,54 +220,51 @@ class FormatterDMS(object):
                 break
 
             d = factor // threshold
-            int_log_d = int(floor(math.log10(d)))
-            if 10**int_log_d == d and d!=1:
+            int_log_d = int(np.floor(np.log10(d)))
+            if 10**int_log_d == d and d != 1:
                 number_fraction = int_log_d
                 factor = factor // 10**int_log_d
                 return factor, number_fraction
 
         return factor, number_fraction
 
-
     def __call__(self, direction, factor, values):
         if len(values) == 0:
             return []
-        #ss = [[-1, 1][v>0] for v in values] #not py24 compliant
-        values = np.asarray(values)
-        ss = np.where(values>0, 1, -1)
 
-        sign_map = {(-1, True):"-"}
-        signs = [sign_map.get((s, v!=0), "") for s, v in zip(ss, values)]
+        ss = np.sign(values)
+        signs = ["-" if v < 0 else "" for v in values]
 
         factor, number_fraction = self._get_number_fraction(factor)
 
         values = np.abs(values)
 
         if number_fraction is not None:
-            values, frac_part = divmod(values, 10**number_fraction)
+            values, frac_part = divmod(values, 10 ** number_fraction)
             frac_fmt = "%%0%dd" % (number_fraction,)
             frac_str = [frac_fmt % (f1,) for f1 in frac_part]
 
         if factor == 1:
             if number_fraction is None:
-                return [self.fmt_d % (s*int(v),) for (s, v) in zip(ss, values)]
+                return [self.fmt_d % (s * int(v),) for s, v in zip(ss, values)]
             else:
-                return [self.fmt_ds % (s*int(v), f1) for (s, v, f1) in \
-                        zip(ss, values, frac_str)]
+                return [self.fmt_ds % (s * int(v), f1)
+                        for s, v, f1 in zip(ss, values, frac_str)]
         elif factor == 60:
             deg_part, min_part = divmod(values, 60)
             if number_fraction is None:
-                return [self.fmt_d_m % (s1, d1, m1) \
+                return [self.fmt_d_m % (s1, d1, m1)
                         for s1, d1, m1 in zip(signs, deg_part, min_part)]
             else:
-                return [self.fmt_d_ms % (s, d1, m1, f1) \
-                        for s, d1, m1, f1 in zip(signs, deg_part, min_part, frac_str)]
+                return [self.fmt_d_ms % (s, d1, m1, f1)
+                        for s, d1, m1, f1
+                        in zip(signs, deg_part, min_part, frac_str)]
 
         elif factor == 3600:
             if ss[-1] == -1:
                 inverse_order = True
                 values = values[::-1]
-                sings = signs[::-1]
+                signs = signs[::-1]
             else:
                 inverse_order = False
 
@@ -310,15 +277,16 @@ class FormatterDMS(object):
             if number_fraction is None:
                 sec_str = [self.fmt_s_partial % (s1,) for s1 in sec_part]
             else:
-                sec_str = [self.fmt_ss_partial % (s1, f1) for s1, f1 in zip(sec_part, frac_str)]
+                sec_str = [self.fmt_ss_partial % (s1, f1)
+                           for s1, f1 in zip(sec_part, frac_str)]
 
             for s, d1, m1, s1 in zip(signs, deg_part, min_part, sec_str):
                 l_hm = self.fmt_d_m_partial % (s, d1, m1)
                 if l_hm != l_hm_old:
                     l_hm_old = l_hm
-                    l = l_hm + s1 #l_s
+                    l = l_hm + s1
                 else:
-                    l = "$"+s1 #l_s
+                    l = "$" + s + s1
                 r.append(l)
 
             if inverse_order:
@@ -326,86 +294,74 @@ class FormatterDMS(object):
             else:
                 return r
 
-        else: # factor > 3600.
+        else:  # factor > 3600.
             return [r"$%s^{\circ}$" % (str(v),) for v in ss*values]
 
+
 class FormatterHMS(FormatterDMS):
-    deg_mark = "^\mathrm{h}"
-    min_mark = "^\mathrm{m}"
-    sec_mark = "^\mathrm{s}"
+    deg_mark = r"^\mathrm{h}"
+    min_mark = r"^\mathrm{m}"
+    sec_mark = r"^\mathrm{s}"
 
-    fmt_d = "$%d"+deg_mark+"$"
-    fmt_ds = r"$%d.\!\!"+deg_mark+"%s$"
+    fmt_d = "$%d" + deg_mark + "$"
+    fmt_ds = r"$%d.%s" + deg_mark + "$"
 
-    # %s for signe
-    fmt_d_m = r"$%s%d"+deg_mark+"\,%02d"+min_mark+"$"
-    fmt_d_ms = r"$%s%d"+deg_mark+"\,%02d.\!\!"+min_mark+"%s$"
+    # %s for sign
+    fmt_d_m = r"$%s%d" + deg_mark + r"\,%02d" + min_mark+"$"
+    fmt_d_ms = r"$%s%d" + deg_mark + r"\,%02d.%s" + min_mark+"$"
 
+    fmt_d_m_partial = "$%s%d" + deg_mark + r"\,%02d" + min_mark + r"\,"
+    fmt_s_partial = "%02d" + sec_mark + "$"
+    fmt_ss_partial = "%02d.%s" + sec_mark + "$"
 
-    fmt_d_m_partial = "$%s%d"+deg_mark+"\,%02d"+min_mark+"\,"
-    fmt_s_partial = "%02d"+sec_mark+"$"
-    fmt_ss_partial = "%02d.\!\!"+sec_mark+"%s$"
-
-
-    def __call__(self, direction, factor, values): # hour
-        return FormatterDMS.__call__(self, direction, factor, np.asarray(values)/15.)
-
-
-
+    def __call__(self, direction, factor, values):  # hour
+        return super().__call__(direction, factor, np.asarray(values) / 15)
 
 
 class ExtremeFinderCycle(ExtremeFinderSimple):
     """
     When there is a cycle, e.g., longitude goes from 0-360.
     """
-    def __init__(self,
-                 nx, ny,
-                 lon_cycle = 360.,
-                 lat_cycle = None,
-                 lon_minmax = None,
-                 lat_minmax = (-90, 90)
-                 ):
-        #self.transfrom_xy = transform_xy
-        #self.inv_transfrom_xy = inv_transform_xy
+    def __init__(self, nx, ny,
+                 lon_cycle=360., lat_cycle=None,
+                 lon_minmax=None, lat_minmax=(-90, 90)):
         self.nx, self.ny = nx, ny
         self.lon_cycle, self.lat_cycle = lon_cycle, lat_cycle
         self.lon_minmax = lon_minmax
         self.lat_minmax = lat_minmax
 
-
     def __call__(self, transform_xy, x1, y1, x2, y2):
-        """
-        get extreme values.
-
-        x1, y1, x2, y2 in image coordinates (0-based)
-        nx, ny : number of divisions in each axis
-        """
+        # docstring inherited
         x_, y_ = np.linspace(x1, x2, self.nx), np.linspace(y1, y2, self.ny)
         x, y = np.meshgrid(x_, y_)
         lon, lat = transform_xy(np.ravel(x), np.ravel(y))
 
         # iron out jumps, but algorithm should be improved.
-        # Tis is just naive way of doing and my fail for some cases.
-        if self.lon_cycle is not None:
-            lon0 = np.nanmin(lon)
-            lon -= 360. * ((lon - lon0) > 180.)
-        if self.lat_cycle is not None:
-            lat0 = np.nanmin(lat)
-            lat -= 360. * ((lat - lat0) > 180.)
+        # This is just naive way of doing and my fail for some cases.
+        # Consider replacing this with numpy.unwrap
+        # We are ignoring invalid warnings. They are triggered when
+        # comparing arrays with NaNs using > We are already handling
+        # that correctly using np.nanmin and np.nanmax
+        with np.errstate(invalid='ignore'):
+            if self.lon_cycle is not None:
+                lon0 = np.nanmin(lon)
+                lon -= 360. * ((lon - lon0) > 180.)
+            if self.lat_cycle is not None:
+                lat0 = np.nanmin(lat)
+                lat -= 360. * ((lat - lat0) > 180.)
 
         lon_min, lon_max = np.nanmin(lon), np.nanmax(lon)
         lat_min, lat_max = np.nanmin(lat), np.nanmax(lat)
 
         lon_min, lon_max, lat_min, lat_max = \
-                 self._adjust_extremes(lon_min, lon_max, lat_min, lat_max)
+            self._adjust_extremes(lon_min, lon_max, lat_min, lat_max)
 
         return lon_min, lon_max, lat_min, lat_max
-
 
     def _adjust_extremes(self, lon_min, lon_max, lat_min, lat_max):
 
         lon_min, lon_max, lat_min, lat_max = \
-                 self._add_pad(lon_min, lon_max, lat_min, lat_max)
+            self._add_pad(lon_min, lon_max, lat_min, lat_max)
 
         # check cycle
         if self.lon_cycle:
@@ -426,50 +382,3 @@ class ExtremeFinderCycle(ExtremeFinderSimple):
             lat_max = min(max0, lat_max)
 
         return lon_min, lon_max, lat_min, lat_max
-
-
-
-
-
-if __name__ == "__main__":
-    #test2()
-    #print select_step360(21.2, 33.3, 5)
-    #print select_step360(20+21.2/60., 21+33.3/60., 5)
-    #print select_step360(20.5+21.2/3600., 20.5+33.3/3600., 5)
-
-    # test threshold factor
-    print(select_step360(20.5+11.2/3600., 20.5+53.3/3600., 5,
-                         threshold_factor=60))
-
-    print(select_step360(20.5+11.2/3600., 20.5+53.3/3600., 5,
-                         threshold_factor=1))
-
-    fmt = FormatterDMS()
-    #print fmt("left", 60, [0, -30, -60])
-    print(fmt("left", 600, [12301, 12302, 12303]))
-
-    print(select_step360(20.5+21.2/3600., 20.5+21.4/3600., 5))
-    print(fmt("left", 36000, [738210, 738215, 738220]))
-    print(fmt("left", 360000, [7382120, 7382125, 7382130]))
-    print(fmt("left", 1., [45, 46, 47]))
-    print(fmt("left", 10., [452, 453, 454]))
-
-if 0:
-    print(select_step360(20+21.2/60., 21+33.3/60., 5))
-    print(select_step360(20.5+21.2/3600., 20.5+33.3/3600., 5))
-    print(select_step360(20+21.2/60., 20+53.3/60., 5))
-
-    ###
-    levs, n, factor = select_step360(20.5+21.2/3600., 20.5+27.25/3600., 5)
-    levs = levs * 0.1
-    fmt = FormatterDMS()
-    #print fmt("left", 60, [0, -30, -60])
-    print(fmt("left", factor, levs))
-
-
-    print(select_step(-180, 180, 10, hour=False))
-    print(select_step(-12, 12, 10, hour=True))
-
-    fmt = FormatterDMS()
-    #print fmt("left", 60, [0, -30, -60])
-    print(fmt("left", 3600, [0, -30, -60]))

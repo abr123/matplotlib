@@ -1,87 +1,73 @@
 """Interactive figures in the IPython notebook"""
+# Note: There is a notebook in
+# lib/matplotlib/backends/web_backend/nbagg_uat.ipynb to help verify
+# that changes made maintain expected behaviour.
+
 from base64 import b64encode
-import json
 import io
-import os
-from uuid import uuid4 as uuid
+import json
+import pathlib
+import uuid
 
 from IPython.display import display, Javascript, HTML
-from IPython.kernel.comm import Comm
+try:
+    # Jupyter/IPython 4.x or later
+    from ipykernel.comm import Comm
+except ImportError:
+    # Jupyter/IPython 3.x or earlier
+    from IPython.kernel.comm import Comm
 
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_webagg_core import (FigureManagerWebAgg,
-                                                     FigureCanvasWebAggCore,
-                                                     NavigationToolbar2WebAgg)
-from matplotlib.backend_bases import ShowBase, NavigationToolbar2
-
-
-class Show(ShowBase):
-    def __call__(self, block=None):
-        import matplotlib._pylab_helpers as pylab_helpers
-        from matplotlib import is_interactive
-
-        managers = pylab_helpers.Gcf.get_all_fig_managers()
-        if not managers:
-            return
-
-        interactive = is_interactive()
-
-        for manager in managers:
-            manager.show()
-            if not interactive and manager in pylab_helpers.Gcf._activeQue:
-                pylab_helpers.Gcf._activeQue.remove(manager)
-
-
-show = Show()
-
-
-def draw_if_interactive():
-    from matplotlib import is_interactive
-    import matplotlib._pylab_helpers as pylab_helpers
-
-    if is_interactive():
-        manager = pylab_helpers.Gcf.get_active()
-        if manager is not None:
-            manager.show()
+from matplotlib import cbook, is_interactive
+from matplotlib._pylab_helpers import Gcf
+from matplotlib.backend_bases import _Backend, NavigationToolbar2
+from matplotlib.backends.backend_webagg_core import (
+    FigureCanvasWebAggCore, FigureManagerWebAgg, NavigationToolbar2WebAgg,
+    TimerTornado)
 
 
 def connection_info():
     """
-    Return a string showing the figure and connection status for
-    the backend.
+    Return a string showing the figure and connection status for the backend.
 
+    This is intended as a diagnostic tool, and not for general use.
     """
-    # TODO: Make this useful!
-    import matplotlib._pylab_helpers as pylab_helpers
-    result = []
-    for manager in pylab_helpers.Gcf.get_all_fig_managers():
-        fig = manager.canvas.figure
-        result.append('{} - {}'.format((fig.get_label() or
-                                        "Figure {0}".format(manager.num)),
-                                       manager.web_sockets))
-    result.append('Figures pending show: ' +
-                  str(len(pylab_helpers.Gcf._activeQue)))
+    result = [
+        '{fig} - {socket}'.format(
+            fig=(manager.canvas.figure.get_label()
+                 or "Figure {}".format(manager.num)),
+            socket=manager.web_sockets)
+        for manager in Gcf.get_all_fig_managers()
+    ]
+    if not is_interactive():
+        result.append(f'Figures pending show: {len(Gcf.figs)}')
     return '\n'.join(result)
 
 
+# Note: Version 3.2 and 4.x icons
+# http://fontawesome.io/3.2.1/icons/
+# http://fontawesome.io/
+# the `fa fa-xxx` part targets font-awesome 4, (IPython 3.x)
+# the icon-xxx targets font awesome 3.21 (IPython 2.x)
+_FONT_AWESOME_CLASSES = {
+    'home': 'fa fa-home icon-home',
+    'back': 'fa fa-arrow-left icon-arrow-left',
+    'forward': 'fa fa-arrow-right icon-arrow-right',
+    'zoom_to_rect': 'fa fa-square-o icon-check-empty',
+    'move': 'fa fa-arrows icon-move',
+    'download': 'fa fa-floppy-o icon-save',
+    None: None
+}
+
+
 class NavigationIPy(NavigationToolbar2WebAgg):
-    # Note: Version 3.2 icons, not the later 4.0 ones.
-    # http://fontawesome.io/3.2.1/icons/
-    _font_awesome_classes = {
-        'home': 'icon-home',
-        'back': 'icon-arrow-left',
-        'forward': 'icon-arrow-right',
-        'zoom_to_rect': 'icon-check-empty',
-        'move': 'icon-move',
-        None: None
-    }
 
     # Use the standard toolbar items + download button
     toolitems = [(text, tooltip_text,
-                  _font_awesome_classes[image_file], name_of_method)
+                  _FONT_AWESOME_CLASSES[image_file], name_of_method)
                  for text, tooltip_text, image_file, name_of_method
-                 in NavigationToolbar2.toolitems
-                 if image_file in _font_awesome_classes]
+                 in (NavigationToolbar2.toolitems +
+                     (('Download', 'Download plot', 'download', 'download'),))
+                 if image_file in _FONT_AWESOME_CLASSES]
 
 
 class FigureManagerNbAgg(FigureManagerWebAgg):
@@ -93,7 +79,8 @@ class FigureManagerNbAgg(FigureManagerWebAgg):
 
     def display_js(self):
         # XXX How to do this just once? It has to deal with multiple
-        # browser instances using the same kernel.
+        # browser instances using the same kernel (require.js - but the
+        # file isn't static?).
         display(Javascript(FigureManagerNbAgg.get_javascript()))
 
     def show(self):
@@ -105,6 +92,10 @@ class FigureManagerNbAgg(FigureManagerWebAgg):
         self._shown = True
 
     def reshow(self):
+        """
+        A special method to re-show the figure in the notebook.
+
+        """
         self._shown = False
         self.show()
 
@@ -118,12 +109,10 @@ class FigureManagerNbAgg(FigureManagerWebAgg):
             output = io.StringIO()
         else:
             output = stream
-        super(FigureManagerNbAgg, cls).get_javascript(stream=output)
-        with io.open(os.path.join(
-                os.path.dirname(__file__),
-                "web_backend",
-                "nbagg_mpl.js"), encoding='utf8') as fd:
-            output.write(fd.read())
+        super().get_javascript(stream=output)
+        output.write((pathlib.Path(__file__).parent
+                      / "web_backend/js/nbagg_mpl.js")
+                     .read_text(encoding="utf-8"))
         if stream is None:
             return output.getvalue()
 
@@ -134,29 +123,29 @@ class FigureManagerNbAgg(FigureManagerWebAgg):
 
     def destroy(self):
         self._send_event('close')
-        for comm in self.web_sockets.copy():
+        # need to copy comms as callbacks will modify this list
+        for comm in list(self.web_sockets):
             comm.on_close()
+        self.clearup_closed()
+
+    def clearup_closed(self):
+        """Clear up any closed Comms."""
+        self.web_sockets = {socket for socket in self.web_sockets
+                            if socket.is_open()}
+
+        if len(self.web_sockets) == 0:
+            self.canvas.close_event()
+
+    def remove_comm(self, comm_id):
+        self.web_sockets = {socket for socket in self.web_sockets
+                            if socket.comm.comm_id != comm_id}
 
 
-def new_figure_manager(num, *args, **kwargs):
-    """
-    Create a new figure manager instance
-    """
-    FigureClass = kwargs.pop('FigureClass', Figure)
-    thisFig = FigureClass(*args, **kwargs)
-    return new_figure_manager_given_figure(num, thisFig)
+class FigureCanvasNbAgg(FigureCanvasWebAggCore):
+    _timer_cls = TimerTornado
 
 
-def new_figure_manager_given_figure(num, figure):
-    """
-    Create a new figure manager instance for the given figure.
-    """
-    canvas = FigureCanvasWebAggCore(figure)
-    manager = FigureManagerNbAgg(canvas, num)
-    return manager
-
-
-class CommSocket(object):
+class CommSocket:
     """
     Manages the Comm connection between IPython and the browser (client).
 
@@ -169,21 +158,40 @@ class CommSocket(object):
     def __init__(self, manager):
         self.supports_binary = None
         self.manager = manager
-        self.uuid = str(uuid())
+        self.uuid = str(uuid.uuid4())
+        # Publish an output area with a unique ID. The javascript can then
+        # hook into this area.
         display(HTML("<div id=%r></div>" % self.uuid))
         try:
             self.comm = Comm('matplotlib', data={'id': self.uuid})
-        except AttributeError:
+        except AttributeError as err:
             raise RuntimeError('Unable to create an IPython notebook Comm '
-                               'instance. Are you in the IPython notebook?')
+                               'instance. Are you in the IPython '
+                               'notebook?') from err
         self.comm.on_msg(self.on_message)
+
+        manager = self.manager
+        self._ext_close = False
+
+        def _on_close(close_message):
+            self._ext_close = True
+            manager.remove_comm(close_message['content']['comm_id'])
+            manager.clearup_closed()
+
+        self.comm.on_close(_on_close)
+
+    def is_open(self):
+        return not (self._ext_close or self.comm._closed)
 
     def on_close(self):
         # When the socket is closed, deregister the websocket with
         # the FigureManager.
-        if self.comm in self.manager.web_sockets:
-            self.manager.remove_web_socket(self)
-        self.comm.close()
+        if self.is_open():
+            try:
+                self.comm.close()
+            except KeyError:
+                # apparently already cleaned it up?
+                pass
 
     def send_json(self, content):
         self.comm.send({'data': json.dumps(content)})
@@ -191,7 +199,8 @@ class CommSocket(object):
     def send_binary(self, blob):
         # The comm is ascii, so we always send the image in base64
         # encoded data URL form.
-        data_uri = "data:image/png;base64,{0}".format(b64encode(blob))
+        data = b64encode(blob).decode('ascii')
+        data_uri = "data:image/png;base64,{0}".format(data)
         self.comm.send({'data': data_uri})
 
     def on_message(self, message):
@@ -203,7 +212,52 @@ class CommSocket(object):
         message = json.loads(message['content']['data'])
         if message['type'] == 'closing':
             self.on_close()
+            self.manager.clearup_closed()
         elif message['type'] == 'supports_binary':
             self.supports_binary = message['value']
         else:
             self.manager.handle_json(message)
+
+
+@_Backend.export
+class _BackendNbAgg(_Backend):
+    FigureCanvas = FigureCanvasNbAgg
+    FigureManager = FigureManagerNbAgg
+
+    @staticmethod
+    def new_figure_manager_given_figure(num, figure):
+        canvas = FigureCanvasNbAgg(figure)
+        manager = FigureManagerNbAgg(canvas, num)
+        if is_interactive():
+            manager.show()
+            figure.canvas.draw_idle()
+        canvas.mpl_connect('close_event', lambda event: Gcf.destroy(manager))
+        return manager
+
+    @staticmethod
+    def trigger_manager_draw(manager):
+        manager.show()
+
+    @staticmethod
+    def show(block=None):
+        ## TODO: something to do when keyword block==False ?
+        from matplotlib._pylab_helpers import Gcf
+
+        managers = Gcf.get_all_fig_managers()
+        if not managers:
+            return
+
+        interactive = is_interactive()
+
+        for manager in managers:
+            manager.show()
+
+            # plt.figure adds an event which makes the figure in focus the
+            # active one. Disable this behaviour, as it results in
+            # figures being put as the active figure after they have been
+            # shown, even in non-interactive mode.
+            if hasattr(manager, '_cidgcf'):
+                manager.canvas.mpl_disconnect(manager._cidgcf)
+
+            if not interactive:
+                Gcf.figs.pop(manager.num, None)

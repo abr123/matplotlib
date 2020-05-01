@@ -1,60 +1,51 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
+import itertools
 
-import six
-from six.moves import xrange
+import numpy as np
+import pytest
 
-import numpy
 import matplotlib.pyplot as plt
-from matplotlib.testing.decorators import image_comparison, cleanup
-
-from nose.tools import assert_raises
+from matplotlib.testing.decorators import image_comparison
 
 
-def check_shared(results, f, axs):
+def check_shared(axs, x_shared, y_shared):
     """
-    results is a 4 x 4 x 2 matrix of boolean values where
-        if [i, j, 0] == True, X axis for subplots i and j should be shared
-        if [i, j, 1] == False, Y axis for subplots i and j should not be shared
+    x_shared and y_shared are n x n boolean matrices; entry (i, j) indicates
+    whether the x (or y) axes of subplots i and j should be shared.
     """
-    shared_str = ['x', 'y']
-    shared = [axs[0]._shared_x_axes, axs[0]._shared_y_axes]
-    #shared = {
-    #        'x': a1._shared_x_axes,
-    #        'y': a1._shared_y_axes,
-    #        }
-    tostr = lambda r: "not " if r else ""
-    for i1 in xrange(len(axs)):
-        for i2 in xrange(i1 + 1, len(axs)):
-            for i3 in xrange(len(shared)):
-                assert shared[i3].joined(axs[i1], axs[i2]) == \
-                        results[i1, i2, i3], \
-                        "axes %i and %i incorrectly %ssharing %s axis" % \
-                        (i1, i2, tostr(results[i1, i2, i3]), shared_str[i3])
+    for (i1, ax1), (i2, ax2), (i3, (name, shared)) in itertools.product(
+            enumerate(axs),
+            enumerate(axs),
+            enumerate(zip("xy", [x_shared, y_shared]))):
+        if i2 <= i1:
+            continue
+        assert \
+            (getattr(axs[0], "_shared_{}_axes".format(name)).joined(ax1, ax2)
+             == shared[i1, i2]), \
+            "axes %i and %i incorrectly %ssharing %s axis" % (
+                i1, i2, "not " if shared[i1, i2] else "", name)
 
 
-def check_visible(result, f, axs):
-    tostr = lambda v: "invisible" if v else "visible"
-    for (ax, vx, vy) in zip(axs, result['x'], result['y']):
-        for l in ax.get_xticklabels():
+def check_visible(axs, x_visible, y_visible):
+    for i, (ax, vx, vy) in enumerate(zip(axs, x_visible, y_visible)):
+        for l in ax.get_xticklabels() + [ax.get_xaxis().offsetText]:
             assert l.get_visible() == vx, \
-                    "X axis was incorrectly %s" % (tostr(vx))
-        for l in ax.get_yticklabels():
+                    f"Visibility of x axis #{i} is incorrectly {vx}"
+        for l in ax.get_yticklabels() + [ax.get_yaxis().offsetText]:
             assert l.get_visible() == vy, \
-                    "Y axis was incorrectly %s" % (tostr(vy))
+                    f"Visibility of y axis #{i} is incorrectly {vy}"
 
 
 def test_shared():
     rdim = (4, 4, 2)
     share = {
-            'all': numpy.ones(rdim[:2], dtype=bool),
-            'none': numpy.zeros(rdim[:2], dtype=bool),
-            'row': numpy.array([
+            'all': np.ones(rdim[:2], dtype=bool),
+            'none': np.zeros(rdim[:2], dtype=bool),
+            'row': np.array([
                 [False, True, False, False],
                 [True, False, False, False],
                 [False, False, False, True],
                 [False, False, True, False]]),
-            'col': numpy.array([
+            'col': np.array([
                 [False, False, True, False],
                 [False, False, False, True],
                 [True, False, False, False],
@@ -84,8 +75,7 @@ def test_shared():
     # test default
     f, ((a1, a2), (a3, a4)) = plt.subplots(2, 2)
     axs = [a1, a2, a3, a4]
-    check_shared(numpy.dstack((share['none'], share['none'])), \
-            f, axs)
+    check_shared(axs, share['none'], share['none'])
     plt.close(f)
 
     # test all option combinations
@@ -94,44 +84,92 @@ def test_shared():
         for yo in ops:
             f, ((a1, a2), (a3, a4)) = plt.subplots(2, 2, sharex=xo, sharey=yo)
             axs = [a1, a2, a3, a4]
-            check_shared(numpy.dstack((share[xo], share[yo])), \
-                    f, axs)
-            check_visible(dict(x=visible['x'][xo], y=visible['y'][yo]), \
-                    f, axs)
+            check_shared(axs, share[xo], share[yo])
+            check_visible(axs, visible['x'][xo], visible['y'][yo])
             plt.close(f)
+
+    # test label_outer
+    f, ((a1, a2), (a3, a4)) = plt.subplots(2, 2, sharex=True, sharey=True)
+    axs = [a1, a2, a3, a4]
+    for ax in axs:
+        ax.label_outer()
+    check_visible(axs, [False, False, True, True], [True, False, True, False])
+
+
+def test_label_outer_span():
+    fig = plt.figure()
+    gs = fig.add_gridspec(3, 3)
+    # +---+---+---+
+    # |   1   |   |
+    # +---+---+---+
+    # |   |   | 3 |
+    # + 2 +---+---+
+    # |   | 4 |   |
+    # +---+---+---+
+    a1 = fig.add_subplot(gs[0, 0:2])
+    a2 = fig.add_subplot(gs[1:3, 0])
+    a3 = fig.add_subplot(gs[1, 2])
+    a4 = fig.add_subplot(gs[2, 1])
+    for ax in fig.axes:
+        ax.label_outer()
+    check_visible(
+        fig.axes, [False, True, False, True], [True, True, False, False])
+
+
+def test_shared_and_moved():
+    # test if sharey is on, but then tick_left is called that labels don't
+    # re-appear.  Seaborn does this just to be sure yaxis is on left...
+    f, (a1, a2) = plt.subplots(1, 2, sharey=True)
+    check_visible([a2], [True], [False])
+    a2.yaxis.tick_left()
+    check_visible([a2], [True], [False])
+
+    f, (a1, a2) = plt.subplots(2, 1, sharex=True)
+    check_visible([a1], [False], [True])
+    a2.xaxis.tick_bottom()
+    check_visible([a1], [False], [True])
 
 
 def test_exceptions():
     # TODO should this test more options?
-    assert_raises(ValueError, plt.subplots, 2, 2, sharex='blah')
-    assert_raises(ValueError, plt.subplots, 2, 2, sharey='blah')
-    assert_raises(ValueError, plt.subplots, 2, 2, -1)
-    # uncomment this for 1.5
-    # assert_raises(ValueError, plt.subplots, 2, 2, 0)
-    assert_raises(ValueError, plt.subplots, 2, 2, 5)
+    with pytest.raises(ValueError):
+        plt.subplots(2, 2, sharex='blah')
+    with pytest.raises(ValueError):
+        plt.subplots(2, 2, sharey='blah')
+    # We filter warnings in this test which are genuine since
+    # the point of this test is to ensure that this raises.
+    with pytest.warns(UserWarning, match='.*sharex argument to subplots'), \
+         pytest.raises(ValueError):
+        plt.subplots(2, 2, -1)
+    with pytest.warns(UserWarning, match='.*sharex argument to subplots'), \
+         pytest.raises(ValueError):
+        plt.subplots(2, 2, 0)
+    with pytest.warns(UserWarning, match='.*sharex argument to subplots'), \
+         pytest.raises(ValueError):
+        plt.subplots(2, 2, 5)
 
 
-@image_comparison(baseline_images=['subplots_offset_text'], remove_text=False)
+@image_comparison(['subplots_offset_text'], remove_text=False)
 def test_subplots_offsettext():
-    x = numpy.arange(0, 1e10, 1e9)
-    y = numpy.arange(0, 100, 10)+1e4
-    fig, axes = plt.subplots(2, 2, sharex='col', sharey='all')
-    axes[0, 0].plot(x, x)
-    axes[1, 0].plot(x, x)
-    axes[0, 1].plot(y, x)
-    axes[1, 1].plot(y, x)
+    x = np.arange(0, 1e10, 1e9)
+    y = np.arange(0, 100, 10)+1e4
+    fig, axs = plt.subplots(2, 2, sharex='col', sharey='all')
+    axs[0, 0].plot(x, x)
+    axs[1, 0].plot(x, x)
+    axs[0, 1].plot(y, x)
+    axs[1, 1].plot(y, x)
 
 
-@cleanup
-def test_subplots():
-    # things to test
-    # - are axes actually shared?
-    # - are tickmarks correctly hidden?
-    test_shared()
-    # - are exceptions thrown correctly
-    test_exceptions()
+def test_get_gridspec():
+    # ahem, pretty trivial, but...
+    fig, ax = plt.subplots()
+    assert ax.get_subplotspec().get_gridspec() == ax.get_gridspec()
 
 
-if __name__ == "__main__":
-    import nose
-    nose.runmodule(argv=['-s', '--with-doctest'], exit=False)
+def test_dont_mutate_kwargs():
+    subplot_kw = {'sharex': 'all'}
+    gridspec_kw = {'width_ratios': [1, 2]}
+    fig, ax = plt.subplots(1, 2, subplot_kw=subplot_kw,
+                           gridspec_kw=gridspec_kw)
+    assert subplot_kw == {'sharex': 'all'}
+    assert gridspec_kw == {'width_ratios': [1, 2]}

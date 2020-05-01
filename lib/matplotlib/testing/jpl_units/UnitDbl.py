@@ -1,294 +1,262 @@
-#===========================================================================
-#
-# UnitDbl
-#
-#===========================================================================
-
-
 """UnitDbl module."""
 
-#===========================================================================
-# Place all imports after here.
-#
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
+import operator
 
-import six
-#
-# Place all imports before here.
-#===========================================================================
+from matplotlib import cbook
 
 
-#===========================================================================
 class UnitDbl:
-   """Class UnitDbl in development.
-   """
-   #-----------------------------------------------------------------------
-   # Unit conversion table.  Small subset of the full one but enough
-   # to test the required functions.  First field is a scale factor to
-   # convert the input units to the units of the second field.  Only
-   # units in this table are allowed.
-   allowed = {
-               "m" : ( 0.001, "km" ),
-               "km" : ( 1, "km" ),
-               "mile" : ( 1.609344, "km" ),
+    """Class UnitDbl in development."""
 
-               "rad" : ( 1, "rad" ),
-               "deg" : ( 1.745329251994330e-02, "rad" ),
+    # Unit conversion table.  Small subset of the full one but enough
+    # to test the required functions.  First field is a scale factor to
+    # convert the input units to the units of the second field.  Only
+    # units in this table are allowed.
+    allowed = {
+        "m": (0.001, "km"),
+        "km": (1, "km"),
+        "mile": (1.609344, "km"),
 
-               "sec" : ( 1, "sec" ),
-               "min" : ( 60.0, "sec" ),
-               "hour" : ( 3600, "sec" ),
-             }
+        "rad": (1, "rad"),
+        "deg": (1.745329251994330e-02, "rad"),
 
-   _types = {
-              "km" : "distance",
-              "rad" : "angle",
-              "sec" : "time",
-            }
+        "sec": (1, "sec"),
+        "min": (60.0, "sec"),
+        "hour": (3600, "sec"),
+        }
 
-   #-----------------------------------------------------------------------
-   def __init__( self, value, units ):
-      """Create a new UnitDbl object.
+    _types = {
+        "km": "distance",
+        "rad": "angle",
+        "sec": "time",
+        }
 
-      Units are internally converted to km, rad, and sec.  The only
-      valid inputs for units are [ m, km, mile, rad, deg, sec, min, hour ].
+    def __init__(self, value, units):
+        """
+        Create a new UnitDbl object.
 
-      The field UnitDbl.value will contain the converted value.  Use
-      the convert() method to get a specific type of units back.
+        Units are internally converted to km, rad, and sec.  The only
+        valid inputs for units are [m, km, mile, rad, deg, sec, min, hour].
 
-      = ERROR CONDITIONS
-      - If the input units are not in the allowed list, an error is thrown.
+        The field UnitDbl.value will contain the converted value.  Use
+        the convert() method to get a specific type of units back.
 
-      = INPUT VARIABLES
-      - value    The numeric value of the UnitDbl.
-      - units    The string name of the units the value is in.
-      """
-      self.checkUnits( units )
+        = ERROR CONDITIONS
+        - If the input units are not in the allowed list, an error is thrown.
 
-      data = self.allowed[ units ]
-      self._value = float( value * data[0] )
-      self._units = data[1]
+        = INPUT VARIABLES
+        - value     The numeric value of the UnitDbl.
+        - units     The string name of the units the value is in.
+        """
+        data = cbook._check_getitem(self.allowed, units=units)
+        self._value = float(value * data[0])
+        self._units = data[1]
 
-   #-----------------------------------------------------------------------
-   def convert( self, units ):
-      """Convert the UnitDbl to a specific set of units.
+    def convert(self, units):
+        """
+        Convert the UnitDbl to a specific set of units.
 
-      = ERROR CONDITIONS
-      - If the input units are not in the allowed list, an error is thrown.
+        = ERROR CONDITIONS
+        - If the input units are not in the allowed list, an error is thrown.
 
-      = INPUT VARIABLES
-      - units    The string name of the units to convert to.
+        = INPUT VARIABLES
+        - units     The string name of the units to convert to.
 
-      = RETURN VALUE
-      - Returns the value of the UnitDbl in the requested units as a floating
-        point number.
-      """
-      if self._units == units:
-         return self._value
+        = RETURN VALUE
+        - Returns the value of the UnitDbl in the requested units as a floating
+          point number.
+        """
+        if self._units == units:
+            return self._value
+        data = cbook._check_getitem(self.allowed, units=units)
+        if self._units != data[1]:
+            raise ValueError(f"Error trying to convert to different units.\n"
+                             f"    Invalid conversion requested.\n"
+                             f"    UnitDbl: {self}\n"
+                             f"    Units:   {units}\n")
+        return self._value / data[0]
 
-      self.checkUnits( units )
+    def __abs__(self):
+        """Return the absolute value of this UnitDbl."""
+        return UnitDbl(abs(self._value), self._units)
 
-      data = self.allowed[ units ]
-      if self._units != data[1]:
-         msg = "Error trying to convert to different units.\n" \
-               "   Invalid conversion requested.\n" \
-               "   UnitDbl: %s\n" \
-               "   Units:   %s\n" % ( str( self ), units )
-         raise ValueError( msg )
+    def __neg__(self):
+        """Return the negative value of this UnitDbl."""
+        return UnitDbl(-self._value, self._units)
 
-      return self._value / data[0]
+    def __bool__(self):
+        """Return the truth value of a UnitDbl."""
+        return bool(self._value)
 
-   #-----------------------------------------------------------------------
-   def __abs__( self ):
-      """Return the absolute value of this UnitDbl."""
-      return UnitDbl( abs( self._value ), self._units )
+    def __eq__(self, rhs):
+        return self._cmp(rhs, operator.eq)
 
-   #-----------------------------------------------------------------------
-   def __neg__( self ):
-      """Return the negative value of this UnitDbl."""
-      return UnitDbl( -self._value, self._units )
+    def __ne__(self, rhs):
+        return self._cmp(rhs, operator.ne)
 
-   #-----------------------------------------------------------------------
-   def __nonzero__( self ):
-      """Test a UnitDbl for a non-zero value.
+    def __lt__(self, rhs):
+        return self._cmp(rhs, operator.lt)
 
-      = RETURN VALUE
-      - Returns true if the value is non-zero.
-      """
-      return self._value.__nonzero__()
+    def __le__(self, rhs):
+        return self._cmp(rhs, operator.le)
 
-   if six.PY3:
-      __bool__ = __nonzero__
+    def __gt__(self, rhs):
+        return self._cmp(rhs, operator.gt)
 
-   #-----------------------------------------------------------------------
-   def __cmp__( self, rhs ):
-      """Compare two UnitDbl's.
+    def __ge__(self, rhs):
+        return self._cmp(rhs, operator.ge)
 
-      = ERROR CONDITIONS
-      - If the input rhs units are not the same as our units,
-        an error is thrown.
+    def _cmp(self, rhs, op):
+        """
+        Compare two UnitDbl's.
 
-      = INPUT VARIABLES
-      - rhs    The UnitDbl to compare against.
+        = ERROR CONDITIONS
+        - If the input rhs units are not the same as our units,
+          an error is thrown.
 
-      = RETURN VALUE
-      - Returns -1 if self < rhs, 0 if self == rhs, +1 if self > rhs.
-      """
-      self.checkSameUnits( rhs, "compare" )
-      return cmp( self._value, rhs._value )
+        = INPUT VARIABLES
+        - rhs     The UnitDbl to compare against.
+        - op      The function to do the comparison
 
-   #-----------------------------------------------------------------------
-   def __add__( self, rhs ):
-      """Add two UnitDbl's.
+        = RETURN VALUE
+        - Returns op(self, rhs)
+        """
+        self.checkSameUnits(rhs, "compare")
+        return op(self._value, rhs._value)
 
-      = ERROR CONDITIONS
-      - If the input rhs units are not the same as our units,
-        an error is thrown.
+    def __add__(self, rhs):
+        """
+        Add two UnitDbl's.
 
-      = INPUT VARIABLES
-      - rhs    The UnitDbl to add.
+        = ERROR CONDITIONS
+        - If the input rhs units are not the same as our units,
+          an error is thrown.
 
-      = RETURN VALUE
-      - Returns the sum of ourselves and the input UnitDbl.
-      """
-      self.checkSameUnits( rhs, "add" )
-      return UnitDbl( self._value + rhs._value, self._units )
+        = INPUT VARIABLES
+        - rhs     The UnitDbl to add.
 
-   #-----------------------------------------------------------------------
-   def __sub__( self, rhs ):
-      """Subtract two UnitDbl's.
+        = RETURN VALUE
+        - Returns the sum of ourselves and the input UnitDbl.
+        """
+        self.checkSameUnits(rhs, "add")
+        return UnitDbl(self._value + rhs._value, self._units)
 
-      = ERROR CONDITIONS
-      - If the input rhs units are not the same as our units,
-        an error is thrown.
+    def __sub__(self, rhs):
+        """
+        Subtract two UnitDbl's.
 
-      = INPUT VARIABLES
-      - rhs    The UnitDbl to subtract.
+        = ERROR CONDITIONS
+        - If the input rhs units are not the same as our units,
+          an error is thrown.
 
-      = RETURN VALUE
-      - Returns the difference of ourselves and the input UnitDbl.
-      """
-      self.checkSameUnits( rhs, "subtract" )
-      return UnitDbl( self._value - rhs._value, self._units )
+        = INPUT VARIABLES
+        - rhs     The UnitDbl to subtract.
 
-   #-----------------------------------------------------------------------
-   def __mul__( self, rhs ):
-      """Scale a UnitDbl by a value.
+        = RETURN VALUE
+        - Returns the difference of ourselves and the input UnitDbl.
+        """
+        self.checkSameUnits(rhs, "subtract")
+        return UnitDbl(self._value - rhs._value, self._units)
 
-      = INPUT VARIABLES
-      - rhs    The scalar to multiply by.
+    def __mul__(self, rhs):
+        """
+        Scale a UnitDbl by a value.
 
-      = RETURN VALUE
-      - Returns the scaled UnitDbl.
-      """
-      return UnitDbl( self._value * rhs, self._units )
+        = INPUT VARIABLES
+        - rhs     The scalar to multiply by.
 
-   #-----------------------------------------------------------------------
-   def __rmul__( self, lhs ):
-      """Scale a UnitDbl by a value.
+        = RETURN VALUE
+        - Returns the scaled UnitDbl.
+        """
+        return UnitDbl(self._value * rhs, self._units)
 
-      = INPUT VARIABLES
-      - lhs    The scalar to multiply by.
+    def __rmul__(self, lhs):
+        """
+        Scale a UnitDbl by a value.
 
-      = RETURN VALUE
-      - Returns the scaled UnitDbl.
-      """
-      return UnitDbl( self._value * lhs, self._units )
+        = INPUT VARIABLES
+        - lhs     The scalar to multiply by.
 
-   #-----------------------------------------------------------------------
-   def __div__( self, rhs ):
-      """Divide a UnitDbl by a value.
+        = RETURN VALUE
+        - Returns the scaled UnitDbl.
+        """
+        return UnitDbl(self._value * lhs, self._units)
 
-      = INPUT VARIABLES
-      - rhs    The scalar to divide by.
+    def __str__(self):
+        """Print the UnitDbl."""
+        return "%g *%s" % (self._value, self._units)
 
-      = RETURN VALUE
-      - Returns the scaled UnitDbl.
-      """
-      return UnitDbl( self._value / rhs, self._units )
+    def __repr__(self):
+        """Print the UnitDbl."""
+        return "UnitDbl(%g, '%s')" % (self._value, self._units)
 
-   #-----------------------------------------------------------------------
-   def __str__( self ):
-      """Print the UnitDbl."""
-      return "%g *%s" % ( self._value, self._units )
+    def type(self):
+        """Return the type of UnitDbl data."""
+        return self._types[self._units]
 
-   #-----------------------------------------------------------------------
-   def __repr__( self ):
-      """Print the UnitDbl."""
-      return "UnitDbl( %g, '%s' )" % ( self._value, self._units )
+    @staticmethod
+    def range(start, stop, step=None):
+        """
+        Generate a range of UnitDbl objects.
 
-   #-----------------------------------------------------------------------
-   def type( self ):
-      """Return the type of UnitDbl data."""
-      return self._types[ self._units ]
+        Similar to the Python range() method.  Returns the range [
+        start, stop) at the requested step.  Each element will be a
+        UnitDbl object.
 
-   #-----------------------------------------------------------------------
-   def range( start, stop, step=None ):
-      """Generate a range of UnitDbl objects.
+        = INPUT VARIABLES
+        - start     The starting value of the range.
+        - stop      The stop value of the range.
+        - step      Optional step to use.  If set to None, then a UnitDbl of
+                      value 1 w/ the units of the start is used.
 
-      Similar to the Python range() method.  Returns the range [
-      start, stop ) at the requested step.  Each element will be a
-      UnitDbl object.
+        = RETURN VALUE
+        - Returns a list containing the requested UnitDbl values.
+        """
+        if step is None:
+            step = UnitDbl(1, start._units)
 
-      = INPUT VARIABLES
-      - start    The starting value of the range.
-      - stop     The stop value of the range.
-      - step     Optional step to use.  If set to None, then a UnitDbl of
-                 value 1 w/ the units of the start is used.
+        elems = []
 
-      = RETURN VALUE
-      - Returns a list contianing the requested UnitDbl values.
-      """
-      if step is None:
-         step = UnitDbl( 1, start._units )
+        i = 0
+        while True:
+            d = start + i * step
+            if d >= stop:
+                break
 
-      elems = []
+            elems.append(d)
+            i += 1
 
-      i = 0
-      while True:
-         d = start + i * step
-         if d >= stop:
-            break
+        return elems
 
-         elems.append( d )
-         i += 1
+    @cbook.deprecated("3.2")
+    def checkUnits(self, units):
+        """
+        Check to see if some units are valid.
 
-      return elems
+        = ERROR CONDITIONS
+        - If the input units are not in the allowed list, an error is thrown.
 
-   range = staticmethod( range )
+        = INPUT VARIABLES
+        - units     The string name of the units to check.
+        """
+        if units not in self.allowed:
+            raise ValueError("Input units '%s' are not one of the supported "
+                             "types of %s" % (
+                                units, list(self.allowed.keys())))
 
-   #-----------------------------------------------------------------------
-   def checkUnits( self, units ):
-      """Check to see if some units are valid.
+    def checkSameUnits(self, rhs, func):
+        """
+        Check to see if units are the same.
 
-      = ERROR CONDITIONS
-      - If the input units are not in the allowed list, an error is thrown.
+        = ERROR CONDITIONS
+        - If the units of the rhs UnitDbl are not the same as our units,
+          an error is thrown.
 
-      = INPUT VARIABLES
-      - units    The string name of the units to check.
-      """
-      if units not in self.allowed:
-         msg = "Input units '%s' are not one of the supported types of %s" \
-               % ( units, str( list(six.iterkeys(self.allowed)) ) )
-         raise ValueError( msg )
-
-   #-----------------------------------------------------------------------
-   def checkSameUnits( self, rhs, func ):
-      """Check to see if units are the same.
-
-      = ERROR CONDITIONS
-      - If the units of the rhs UnitDbl are not the same as our units,
-        an error is thrown.
-
-      = INPUT VARIABLES
-      - rhs    The UnitDbl to check for the same units
-      - func   The name of the function doing the check.
-      """
-      if self._units != rhs._units:
-         msg = "Cannot %s units of different types.\n" \
-               "LHS: %s\n" \
-               "RHS: %s" % ( func, self._units, rhs._units )
-         raise ValueError( msg )
-
-#===========================================================================
+        = INPUT VARIABLES
+        - rhs     The UnitDbl to check for the same units
+        - func    The name of the function doing the check.
+        """
+        if self._units != rhs._units:
+            raise ValueError(f"Cannot {func} units of different types.\n"
+                             f"LHS: {self._units}\n"
+                             f"RHS: {rhs._units}")

@@ -1,34 +1,41 @@
 """
-compute the mean and standard deviation (stddev) of 100 data sets and plot
-mean vs stddev.  When you click on one of the mu, sigma points, plot the raw
-data from the dataset that generated the mean and stddev.
+================
+Pick Event Demo2
+================
+
+Compute the mean (mu) and standard deviation (sigma) of 100 data sets and plot
+mu vs. sigma.  When you click on one of the (mu, sigma) points, plot the raw
+data from the dataset that generated this point.
 """
-import numpy
+import numpy as np
 import matplotlib.pyplot as plt
 
 
-X = numpy.random.rand(100, 1000)
-xs = numpy.mean(X, axis=1)
-ys = numpy.std(X, axis=1)
+# Fixing random state for reproducibility
+np.random.seed(19680801)
+
+X = np.random.rand(100, 1000)
+xs = np.mean(X, axis=1)
+ys = np.std(X, axis=1)
 
 fig, ax = plt.subplots()
 ax.set_title('click on point to plot time series')
-line, = ax.plot(xs, ys, 'o', picker=5)  # 5 points tolerance
+line, = ax.plot(xs, ys, 'o', picker=True, pickradius=5)
 
 
 def onpick(event):
 
-    if event.artist!=line: return True
+    if event.artist != line:
+        return True
 
     N = len(event.ind)
-    if not N: return True
+    if not N:
+        return True
 
-
-    figi = plt.figure()
-    for subplotnum, dataind in enumerate(event.ind):
-        ax = figi.add_subplot(N,1,subplotnum+1)
+    figi, axs = plt.subplots(N, squeeze=False)
+    for ax, dataind in zip(axs.flat, event.ind):
         ax.plot(X[dataind])
-        ax.text(0.05, 0.9, 'mu=%1.3f\nsigma=%1.3f'%(xs[dataind], ys[dataind]),
+        ax.text(.05, .9, 'mu=%1.3f\nsigma=%1.3f' % (xs[dataind], ys[dataind]),
                 transform=ax.transAxes, va='top')
         ax.set_ylim(-0.5, 1.5)
     figi.show()
@@ -37,8 +44,3 @@ def onpick(event):
 fig.canvas.mpl_connect('pick_event', onpick)
 
 plt.show()
-
-
-
-
-

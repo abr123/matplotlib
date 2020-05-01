@@ -1,13 +1,7 @@
 """
-This module is to support *bbox_inches* option in savefig command.
+Helper module for the *bbox_inches* parameter in `.Figure.savefig`.
 """
 
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
-import six
-
-import warnings
 from matplotlib.transforms import Bbox, TransformedBbox, Affine2D
 
 
@@ -24,7 +18,10 @@ def adjust_bbox(fig, bbox_inches, fixed_dpi=None):
 
     origBbox = fig.bbox
     origBboxInches = fig.bbox_inches
+    orig_tight_layout = fig.get_tight_layout()
     _boxout = fig.transFigure._boxout
+
+    fig.set_tight_layout(False)
 
     asp_list = []
     locator_list = []
@@ -39,13 +36,13 @@ def adjust_bbox(fig, bbox_inches, fixed_dpi=None):
         ax.set_aspect("auto")
 
     def restore_bbox():
-
         for ax, asp, loc in zip(fig.axes, asp_list, locator_list):
             ax.set_aspect(asp)
             ax.set_axes_locator(loc)
 
         fig.bbox = origBbox
         fig.bbox_inches = origBboxInches
+        fig.set_tight_layout(orig_tight_layout)
         fig.transFigure._boxout = _boxout
         fig.transFigure.invalidate()
         fig.patch.set_bounds(0, 0, 1, 1)
@@ -76,13 +73,13 @@ def adjust_bbox(fig, bbox_inches, fixed_dpi=None):
 
 def process_figure_for_rasterizing(fig, bbox_inches_restore, fixed_dpi=None):
     """
-    This need to be called when figure dpi changes during the drawing
-    (e.g., rasterizing). It recovers the bbox and re-adjust it with
+    A function that needs to be called when figure dpi changes during the
+    drawing (e.g., rasterizing).  It recovers the bbox and re-adjust it with
     the new dpi.
     """
 
     bbox_inches, restore_bbox = bbox_inches_restore
     restore_bbox()
-    r = adjust_bbox(figure, bbox_inches, fixed_dpi)
+    r = adjust_bbox(fig, bbox_inches, fixed_dpi)
 
     return bbox_inches, r

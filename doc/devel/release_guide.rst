@@ -1,240 +1,366 @@
+.. highlight:: bash
+
 .. _release-guide:
 
-**************************
-Doing a matplotlib release
-**************************
+===============
+ Release Guide
+===============
 
-A guide for developers who are doing a matplotlib release.
 
-* Edit :file:`__init__.py` and bump the version number
+.. admonition::  This document is only relevant for Matplotlib release managers.
+
+   A guide for developers who are doing a Matplotlib release.
+
+
+.. note::
+
+   This assumes that a read-only remote for the canonical repository is
+   ``remote`` and a read/write remote is ``DANGER``
+
+All Releases
+============
 
 .. _release-testing:
 
 Testing
-=======
+-------
 
-* Run all of the regression tests by running the `tests.py` script at
-  the root of the source tree.
+We use `Travis CI <https://travis-ci.org/matplotlib/matplotlib>`__ for
+continuous integration.  When preparing for a release, the final
+tagged commit should be tested locally before it is uploaded::
 
-* Run :file:`unit/memleak_hawaii3.py` and make sure there are no
-  memory leaks
+   pytest -n 8 .
 
-* try some GUI examples, eg :file:`simple_plot.py` with GTKAgg, TkAgg, etc...
 
-* remove font cache and tex cache from :file:`.matplotlib` and test
-  with and without cache on some example script
+In addition the following test should be run and manually inspected::
 
-* Optionally, make sure :file:`examples/tests/backend_driver.py` runs
-  without errors and check the output of the PNG, PDF, PS and SVG
-  backends
+   python tools/memleak.py agg 1000 agg.pdf
 
-.. _release-branching:
 
-Branching
-=========
+In addition the following should be run and manually inspected, but
+is currently broken::
 
-Once all the tests are passing and you are ready to do a release, you
-need to create a release branch.  These only need to be created when
-the second part of the version number changes::
+   pushd examples/tests/
+   python backend_driver_sgskip.py
+   popd
 
-   git checkout -b v1.1.x
-   git push git@github.com:matplotlib/matplotlib.git v1.1.x
 
-On the branch, do any additional testing you want to do, and then build
-binaries and source distributions for testing as release candidates.
+.. _release_ghstats:
 
-For each release candidate as well as for the final release version,
-please `git tag` the commit you will use for packaging like so::
+GitHub Stats
+------------
 
-    git tag -a v1.1.0rc1
 
-The `-a` flag will allow you to write a message about the tag, and
-affiliate your name with it. A reasonable tag message would be something
-like ``v1.1.0 Release Candidate 1 (September 24, 2011)``. To tag a
-release after the fact, just track down the commit hash, and::
+We automatically extract GitHub issue, PRs, and authors from GitHub via the
+API.  Copy the current :file:`doc/users/github_stats.rst` to
+:file:`doc/users/prev_whats_new/github_stats_X.Y.Z.rst`, changing the link
+target at the top of the file, and removing the "Previous GitHub Stats" section
+at the end.
 
-    git tag -a v1.0.1rc1 a9f3f3a50745
+For example, when updating from v3.2.0 to v3.2.1::
 
-Tags allow developers to quickly checkout different releases by name,
-and also provides source download via zip and tarball on github.
+  cp doc/users/github_stats.rst doc/users/prev_whats_new/github_stats_3.2.0.rst
+  $EDITOR doc/users/prev_whats_new/github_stats_3.2.0.rst
+  # Change contents as noted above.
+  git add doc/users/prev_whats_new/github_stats_3.2.0.rst
 
-Then push the tags to the main repository::
+Then re-generate the updated stats::
 
-    git push upstream v1.0.1rc1
+  python tools/github_stats.py --since-tag v3.2.0 --milestone=v3.2.1 --project 'matplotlib/matplotlib' --links > doc/users/github_stats.rst
 
-.. _release-packaging:
+Review and commit changes.  Some issue/PR titles may not be valid reST (the
+most common issue is ``*`` which is interpreted as unclosed markup).
 
-Packaging
-=========
+.. note::
 
-* Make sure the :file:`MANIFEST.in` is up to date and remove
-  :file:`MANIFEST` so it will be rebuilt by MANIFEST.in
+   Make sure you authenticate against the GitHub API.  If you
+   do not you will get blocked by GitHub for going over the API rate
+   limits.  You can authenticate in one of two ways:
 
-* run `git clean` in the mpl git directory before building the sdist
+   * using the ``keyring`` package; ``pip install keyring`` and then when
+     running the stats script, you will be prompted for user name and password,
+     that will be stored in your system keyring, or,
+   * using a personal access token; generate a new token `on this GitHub page
+     <https://github.com/settings/tokens>`__ with the ``repo:public_repo``
+     scope and place the token in :file:`~/.ghoauth`.
 
-* unpack the sdist and make sure you can build from that directory
 
-* Use :file:`setup.cfg` to set the default backends.  For windows and
-  OSX, the default backend should be TkAgg.  You should also turn on
-  or off any platform specific build options you need.  Importantly,
-  you also need to make sure that you delete the :file:`build` dir
-  after any changes to :file:`setup.cfg` before rebuilding since cruft
-  in the :file:`build` dir can get carried along.
+.. _release_chkdocs:
 
-* On windows, unix2dos the rc file.
+Update and Validate the Docs
+----------------------------
 
-* We have a Makefile for the OS X builds in the mpl source dir
-  :file:`release/osx`, so use this to prepare the OS X releases.
+Merge ``*-doc`` branch
+^^^^^^^^^^^^^^^^^^^^^^
 
-* We have a Makefile for the win32 mingw builds in the mpl source dir
-  :file:`release/win32` which you can use this to prepare the windows
-  releases.
+Merge the most recent 'doc' branch (e.g., ``v3.2.0-doc``) into the branch you
+are going to tag on and delete the doc branch on GitHub.
 
-Posting files
-=============
+Update "What's New" and "API changes"
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Our current method is for the release manager to collect all of the
-binaries from the platform builders and post the files online on
-Sourceforge.  It is also possible that those building the binaries
-could upload to directly to Sourceforge.  We also post a source
-tarball to PyPI, since ``pip`` no longer trusts files downloaded from
-other sites.
+Before tagging major and minor releases, the "what's new" and "API changes"
+listings should be updated.  This is not needed for micro releases.
 
-There are many ways to upload files to Sourceforge (`scp`, `rsync`,
-`sftp`, and a web interface) described in `Sourceforge Release File
-System documentation
-<https://sourceforge.net/apps/trac/sourceforge/wiki/Release%20files%20for%20download>`_.
-Below, we will use `sftp`.
+For the "what's new",
 
-1. Create a directory containing all of the release files and `cd` to it.
+ 1. copy the current content to a file in :file:`doc/users/prev_whats_new`
+ 2. merge all of the files in :file:`doc/users/next_whats_new/` into
+    :file:`doc/users/whats_new.rst` and delete the individual files
+ 3. comment out the next what's new glob at the top
 
-2. `sftp` to Sourceforge::
+Similarly for the "API changes",
 
-     sftp USERNAME@frs.sourceforge.net:/home/frs/project/matplotlib/matplotlib
+ 1. copy the current api changes to a file is :file:`doc/api/prev_api_changes`
+ 2. merge all of the files in the most recent :file:`doc/api/api_changes_X.Y`
+    into :file:`doc/api/api_changes.rst`
+ 3. comment out the most recent API changes at the top.
 
-3. Make a new directory for the release and move to it::
+In both cases step 3 will have to be un-done right after the release.
 
-     mkdir matplotlib-1.1.0rc1
-     cd matplotlib-1.1.0rc1
+Verify that docs build
+^^^^^^^^^^^^^^^^^^^^^^
 
-4. Upload all of the files in the current directory on your local machine::
+Finally, make sure that the docs build cleanly ::
 
-     put *
+  make -Cdoc O=-j$(nproc) html latexpdf
 
-If this release is a final release, the default download for the
-matplotlib project should also be updated.  Login to Sourceforge and
-visit the `matplotlib files page
-<https://sourceforge.net/projects/matplotlib/files/matplotlib/>`_.
-Navigate to the tarball of the release you just updated, click on
-"Details" icon (it looks like a lower case ``i``), and make it the
-default download for all platforms.
+After the docs are built, check that all of the links, internal and external,
+are still valid.  We use ``linkchecker`` for this, which has not been ported to
+Python3 yet.  You will need to create a Python2 environment with
+``requests==2.9.0`` and linkchecker ::
 
-There is a list of direct links to downloads on matplotlib's main
-website.  This needs to be manually generated and updated every time
-new files are posted.
+  conda create -p /tmp/lnkchk python=2 requests==2.9.0
+  source activate /tmp/lnkchk
+  pip install linkchecker
+  pushd doc/build/html
+  linkchecker index.html --check-extern
+  popd
 
-1. Clone the matplotlib documentation repository and `cd` into it::
+Address any issues which may arise.  The internal links are checked on Circle
+CI, this should only flag failed external links.
 
-     git clone git@github.com:matplotlib/matplotlib.github.com.git
-     cd matplotlib.github.com
+.. _release_tag:
 
-2. Update the list of downloads that you want to display by editing
-   the `downloads.txt` file.  Generally, this should contain the last two
-   final releases and any active release candidates.
+Create release commit and tag
+-----------------------------
 
-3. Update the downloads webpage by running the `update_downloads.py`
-   script.  This script requires `paramiko` (for `sftp` support) and
-   `jinja2` for templating.  Both of these dependencies can be
-   installed using pip::
+To create the tag, first create an empty commit with a very terse set of the release notes
+in the commit message ::
 
-     pip install paramiko
-     pip install jinja2
+  git commit --allow-empty
 
-   Then update the download page::
+and then create a signed, annotated tag with the same text in the body
+message ::
 
-     ./update_downloads.py
+  git tag -a -s v2.0.0
 
-   You will be prompted for your Sourceforge username and password.
+which will prompt you for your GPG key password and an annotation.  For pre
+releases it is important to follow :pep:`440` so that the build artifacts will
+sort correctly in PyPI.
 
-4. Commit the changes and push them up to github::
+To prevent issues with any down-stream builders which download the
+tarball from GitHub it is important to move all branches away from the commit
+with the tag [#]_::
 
-     git commit -m "Updating download list"
-     git push
+  git commit --allow-empty
 
-Update PyPI
-===========
+Finally, push the tag to GitHub::
 
-Once the tarball has been posted on Sourceforge, you can register a
-link to the new release on PyPI.  This should only be done with final
-(non-release-candidate) releases, since doing so will hide any
-available stable releases.
+  git push DANGER master v2.0.0
 
-You may need to set up your `.pypirc` file as described in the
-`distutils register command documentation
-<http://docs.python.org/2/distutils/packageindex.html>`_.
+Congratulations, the scariest part is done!
 
-Then updating the record on PyPI is as simple as::
+.. [#] The tarball that is provided by GitHub is produced using `git
+       archive <https://git-scm.com/docs/git-archive>`__.  We use
+       `versioneer <https://github.com/warner/python-versioneer>`__
+       which uses a format string in
+       :file:`lib/matplotlib/_version.py` to have ``git`` insert a
+       list of references to exported commit (see
+       :file:`.gitattributes` for the configuration).  This string is
+       then used by ``versioneer`` to produce the correct version,
+       based on the git tag, when users install from the tarball.
+       However, if there is a branch pointed at the tagged commit,
+       then the branch name will also be included in the tarball.
+       When the branch eventually moves, anyone how checked the hash
+       of the tarball before the branch moved will have an incorrect
+       hash.
 
-    python setup.py register
+       To generate the file that GitHub does use ::
 
-This will hide any previous releases automatically.
+          git archive v2.0.0 -o matplotlib-2.0.0.tar.gz --prefix=matplotlib-2.0.0/
 
-Then, to upload the source tarball::
 
-    rm -rf dist
-    python setup.py sdist upload
+If this is a final release, also create a 'doc' branch (this is not
+done for pre-releases)::
 
-Documentation updates
-=====================
+   git branch v2.0.0-doc
+   git push DANGER v2.0.0-doc
+
+and if this is a major or minor release, also create a bug-fix branch (a micro
+release will be cut from this branch)::
+
+   git branch v2.0.x
+
+On this branch un-comment the globs from :ref:`release_chkdocs`.  And then ::
+
+   git push DANGER v2.0.x
+
+
+
+
+.. _release_DOI:
+
+Release Management / DOI
+------------------------
+
+Via the `GitHub UI
+<https://github.com/matplotlib/matplotlib/releases>`__, turn the newly
+pushed tag into a release.  If this is a pre-release remember to mark
+it as such.
+
+For final releases, also get the DOI from `zenodo <https://zenodo.org/>`__
+(which will automatically produce one once the tag is pushed), add the DOI link
+to :file:`doc/citing.rst`, commit to the VER-doc branch and push to GitHub ::
+
+  git checkout v2.0.0-doc
+  $EDITOR doc/citing.html
+  git push DANGER v2.0.0-doc:v2.0.0-doc
+
+.. _release_bld_bin:
+
+Building binaries
+-----------------
+
+We distribute macOS, Windows, and many Linux wheels as well as a source tarball
+via PyPI.  Most builders should trigger automatically once the tag is pushed to
+GitHub:
+
+* Mac and manylinux wheels are built on Travis CI.  Builds are triggered by the
+  GitHub Action defined in :file:`.github/workflows/wheels.yml`, and wheels
+  will be available at the site defined in the `matplotlib-wheels repo
+  <https://github.com/MacPython/matplotlib-wheels>`__.
+* Windows wheels are built by Christoph Gohlke automatically and will be
+  `available at his site
+  <https://www.lfd.uci.edu/~gohlke/pythonlibs/#matplotlib>`__ once built.
+* The auto-tick bot should open a pull request into the `conda-forge feedstock
+  <https://github.com/conda-forge/matplotlib-feedstock>`__.  Review and merge
+  (if you have the power to).
+
+.. warning::
+
+   Because this is automated, it is extremely important to bump all branches
+   away from the tag as discussed in :ref:`release_tag`.
+
+If this is a final release the following downstream packagers should be contacted:
+
+- Debian
+- Fedora
+- Arch
+- Gentoo
+- Macports
+- Homebrew
+- Continuum
+- Enthought
+
+This can be done ahead of collecting all of the binaries and uploading to pypi.
+
+
+.. _release_upload_bin:
+
+Make distribution and upload to PyPI
+------------------------------------
+
+Once you have collected all of the wheels (expect this to take about a
+day), generate the tarball ::
+
+  git checkout v2.0.0
+  git clean -xfd
+  python setup.py sdist
+
+and copy all of the wheels into :file:`dist` directory.  First, check
+that the dist files are OK ::
+
+  twine check dist/*
+
+and then use ``twine`` to upload all of the files to pypi ::
+
+   twine upload -s dist/matplotlib*tar.gz
+   twine upload dist/*whl
+
+Congratulations, you have now done the second scariest part!
+
+
+.. _release_docs:
+
+Build and Deploy Documentation
+------------------------------
+
+To build the documentation you must have the tagged version installed, but
+build the docs from the ``ver-doc`` branch.  An easy way to arrange this is::
+
+  pip install matplotlib
+  pip install -r requirements/doc/doc-requirements.txt
+  git checkout v2.0.0-doc
+  git clean -xfd
+  make -Cdoc O=-j$(nproc) html latexpdf LATEXMKOPTS="-silent -f"
+
+which will build both the html and pdf version of the documentation.
+
 
 The built documentation exists in the `matplotlib.github.com
-<https://github.com/matplotlib/matplotlib.github.com/>`_ repository.
+<https://github.com/matplotlib/matplotlib.github.com/>`__ repository.
 Pushing changes to master automatically updates the website.
 
-The documentation is organized by version.  At the root of the tree is
-always the documentation for the latest stable release.  Under that,
-there are directories containing the documentation for older versions
-as well as the bleeding edge release version called `dev` (usually
-based on what's on master in the github repository, but it may also
-temporarily be a staging area for proposed changes).  There is also a
-symlink directory with the name of the most recently released version
-that points to the root.  With each new release, these directories may
-need to be reorganized accordingly.  Any time these version
-directories are added or removed, the `versions.html` file (which
-contains a list of the available documentation versions for the user)
-must also be updated.
+The documentation is organized by version.  At the root of the tree is always
+the documentation for the latest stable release.  Under that, there are
+directories containing the documentation for older versions.  The documentation
+for current master is built on Circle CI and pushed to the `devdocs
+<https://github.com/matplotlib/devdocs/>`__ repository.  These are available at
+`matplotlib.org/devdocs <https://matplotlib.org/devdocs>`__.
 
-To make sure everyone's hard work gets credited, regenerate the github
-stats.  `cd` into the tools directory and run::
+Assuming you have this repository checked out in the same directory as
+matplotlib ::
 
-  python github_stats.py $TAG > ../doc/users/github_stats.rst
+  cd ../matplotlib.github.com
+  mkdir 2.0.0
+  rsync -a ../matplotlib/doc/build/html/* 2.0.0
+  cp ../matplotlib/doc/build/latex/Matplotlib.pdf 2.0.0
 
-where `$TAG` is the tag of the last major release.  This will generate
-stats for all work done since that release.
+which will copy the built docs over.  If this is a final release, also
+replace the top-level docs ::
 
-In the matplotlib source repository, build the documentation::
+  rsync -a 2.0.0/* ./
 
-  cd doc
-  python make.py html
-  python make.py latex
+You will need to manually edit :file:`versions.html` to show the last
+3 tagged versions.  Now commit and push everything to GitHub ::
 
-Then copy the build products into your local checkout of the
-`matplotlib.github.com` repository (assuming here to be checked out in
-`~/matplotlib.github.com`::
+  git add *
+  git commit -a -m 'Updating docs for v2.0.0'
+  git push DANGER master
 
-  cp -r build/html/* ~/matplotlib.github.com
-  cp build/latex/Matplotlib.pdf ~/matplotlib.github.com
+Congratulations you have now done the third scariest part!
 
-Then, from the `matplotlib.github.com` directory, commit and push the
-changes upstream::
+If you have access, clear the Cloudflare caches.
 
-  git commit -m "Updating for v1.0.1"
-  git push upstream master
+It typically takes about 5-10 minutes for GitHub to process the push
+and update the live web page (remember to clear your browser cache).
+
 
 Announcing
-==========
+----------
 
-Announce the release on matplotlib-announce, matplotlib-users, and
-matplotlib-devel.  Final (non-release-candidate) versions should also
-be announced on python-announce.  Include a summary of highlights from
-the CHANGELOG and/or post the whole CHANGELOG since the last release.
+The final step is to announce the release to the world.  A short
+version of the release notes along with acknowledgments should be sent to
+
+- matplotlib-users@python.org
+- matplotlib-devel@python.org
+- matplotlib-announce@python.org
+
+For final releases announcements should also be sent to the
+numpy/scipy/scikit-image mailing lists.
+
+In addition, announcements should be made on social networks (twitter
+via the ``@matplotlib`` account, any other via personal accounts).
+`NumFOCUS <https://numfocus.org/>`__ should be contacted for
+inclusion in their newsletter.

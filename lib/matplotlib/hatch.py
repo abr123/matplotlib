@@ -1,27 +1,17 @@
-"""
-Contains a classes for generating hatch patterns.
-"""
-
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
-import six
-from six.moves import xrange
+"""Contains classes for generating hatch patterns."""
 
 import numpy as np
 from matplotlib.path import Path
 
 
 class HatchPatternBase:
-    """
-    The base class for a hatch pattern.
-    """
+    """The base class for a hatch pattern."""
     pass
 
 
 class HorizontalHatch(HatchPatternBase):
     def __init__(self, hatch, density):
-        self.num_lines = (hatch.count('-') + hatch.count('+')) * density
+        self.num_lines = int((hatch.count('-') + hatch.count('+')) * density)
         self.num_vertices = self.num_lines * 2
 
     def set_vertices_and_codes(self, vertices, codes):
@@ -38,7 +28,7 @@ class HorizontalHatch(HatchPatternBase):
 
 class VerticalHatch(HatchPatternBase):
     def __init__(self, hatch, density):
-        self.num_lines = (hatch.count('|') + hatch.count('+')) * density
+        self.num_lines = int((hatch.count('|') + hatch.count('+')) * density)
         self.num_vertices = self.num_lines * 2
 
     def set_vertices_and_codes(self, vertices, codes):
@@ -55,15 +45,15 @@ class VerticalHatch(HatchPatternBase):
 
 class NorthEastHatch(HatchPatternBase):
     def __init__(self, hatch, density):
-        self.num_lines = (hatch.count('/') + hatch.count('x') +
-                          hatch.count('X')) * density
+        self.num_lines = int(
+            (hatch.count('/') + hatch.count('x') + hatch.count('X')) * density)
         if self.num_lines:
             self.num_vertices = (self.num_lines + 1) * 2
         else:
             self.num_vertices = 0
 
     def set_vertices_and_codes(self, vertices, codes):
-        steps = np.linspace(-0.5, 0.5, self.num_lines + 1, True)
+        steps = np.linspace(-0.5, 0.5, self.num_lines + 1)
         vertices[0::2, 0] = 0.0 + steps
         vertices[0::2, 1] = 0.0 - steps
         vertices[1::2, 0] = 1.0 + steps
@@ -74,16 +64,16 @@ class NorthEastHatch(HatchPatternBase):
 
 class SouthEastHatch(HatchPatternBase):
     def __init__(self, hatch, density):
-        self.num_lines = (hatch.count('\\') + hatch.count('x') +
-                          hatch.count('X')) * density
-        self.num_vertices = (self.num_lines + 1) * 2
+        self.num_lines = int(
+            (hatch.count('\\') + hatch.count('x') + hatch.count('X'))
+            * density)
         if self.num_lines:
             self.num_vertices = (self.num_lines + 1) * 2
         else:
             self.num_vertices = 0
 
     def set_vertices_and_codes(self, vertices, codes):
-        steps = np.linspace(-0.5, 0.5, self.num_lines + 1, True)
+        steps = np.linspace(-0.5, 0.5, self.num_lines + 1)
         vertices[0::2, 0] = 0.0 + steps
         vertices[0::2, 1] = 1.0 + steps
         vertices[1::2, 0] = 1.0 + steps
@@ -100,11 +90,11 @@ class Shapes(HatchPatternBase):
             self.num_shapes = 0
             self.num_vertices = 0
         else:
-            self.num_shapes = ((self.num_rows / 2 + 1) * (self.num_rows + 1) +
-                               (self.num_rows / 2) * (self.num_rows))
+            self.num_shapes = ((self.num_rows // 2 + 1) * (self.num_rows + 1) +
+                               (self.num_rows // 2) * self.num_rows)
             self.num_vertices = (self.num_shapes *
                                  len(self.shape_vertices) *
-                                 (self.filled and 1 or 2))
+                                 (1 if self.filled else 2))
 
     def set_vertices_and_codes(self, vertices, codes):
         offset = 1.0 / self.num_rows
@@ -115,12 +105,11 @@ class Shapes(HatchPatternBase):
         shape_size = len(shape_vertices)
 
         cursor = 0
-        for row in xrange(self.num_rows + 1):
+        for row in range(self.num_rows + 1):
             if row % 2 == 0:
-                cols = np.linspace(0.0, 1.0, self.num_rows + 1, True)
+                cols = np.linspace(0, 1, self.num_rows + 1)
             else:
-                cols = np.linspace(offset / 2.0, 1.0 - offset / 2.0,
-                                   self.num_rows, True)
+                cols = np.linspace(offset / 2, 1 - offset / 2, self.num_rows)
             row_pos = row * offset
             for col_pos in cols:
                 vertices[cursor:cursor + shape_size] = (shape_vertices +
@@ -175,7 +164,8 @@ class Stars(Shapes):
         self.num_rows = (hatch.count('*')) * density
         path = Path.unit_regular_star(5)
         self.shape_vertices = path.vertices
-        self.shape_codes = np.ones(len(self.shape_vertices)) * Path.LINETO
+        self.shape_codes = np.full(len(self.shape_vertices), Path.LINETO,
+                                   dtype=Path.code_type)
         self.shape_codes[0] = Path.MOVETO
         Shapes.__init__(self, hatch, density)
 
@@ -207,7 +197,7 @@ def get_path(hatchpattern, density=6):
         return Path(np.empty((0, 2)))
 
     vertices = np.empty((num_vertices, 2))
-    codes = np.empty((num_vertices,), np.uint8)
+    codes = np.empty(num_vertices, Path.code_type)
 
     cursor = 0
     for pattern in patterns:

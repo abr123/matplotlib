@@ -9,7 +9,6 @@
 /* Very simple interface to the ppr TT routines */
 /* (c) Frank Siegert 1996 */
 
-#include "global_defines.h"
 #include <cstdio>
 #include <cstdarg>
 #include <cstdlib>
@@ -76,7 +75,7 @@ void TTStreamWriter::putline(const char *a)
 void replace_newlines_with_spaces(char *a) {
   char* i = a;
   while (*i != 0) {
-    if (*i == '\n')
+    if (*i == '\r' || *i == '\n')
       *i = ' ';
     i++;
   }

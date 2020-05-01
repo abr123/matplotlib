@@ -1,64 +1,94 @@
-.. _coding-guide:
+.. _pr-guidelines:
 
-************
-Coding guide
-************
+.. raw:: html
 
-.. _pull-request-checklist:
+   <style>
+   .checklist { list-style: none; padding: 0; margin: 0; }
+   .checklist li { margin-left: 24px; padding-left: 23px;  margin-right: 6px; }
+   .checklist li:before { content: "\2610\2001"; margin-left: -24px; }
+   .checklist li p {display: inline; }
+   </style>
 
-Pull request checklist
+***********************
+Pull request guidelines
+***********************
+
+Pull requests (PRs) are the mechanism for contributing to Matplotlibs code and
+documentation.
+
+Summary for PR authors
 ======================
 
-This checklist should be consulted when creating pull requests to make
-sure they are complete before merging.  These are not intended to be
-rigidly followed---it's just an attempt to list in one place all of
-the items that are necessary for a good pull request.  Of course, some
-items will not always apply.
+.. note::
 
-Branch selection
-----------------
+   * We value contributions from people with all levels of experience. In
+     particular if this is your first PR not everything has to be perfect.
+     We'll guide you through the PR process.
+   * Nevertheless, try to follow the guidelines below as well as you can to
+     help make the PR process quick and smooth.
+   * Be patient with reviewers. We try our best to respond quickly, but we
+     have limited bandwidth. If there is no feedback within a couple of days,
+     please ping us by posting a comment to your PR.
 
-* In general, simple bugfixes that are unlikely to introduce new bugs
-  of their own should be merged onto the maintenance branch.  New
-  features, or anything that changes the API, should be made against
-  master.  The rules are fuzzy here -- when in doubt, try to get some
-  consensus.
+When making a PR, pay attention to:
 
-  * Once changes are merged into the maintenance branch, they should
-    be merged into master.
+.. rst-class:: checklist
 
-Style
------
+* :ref:`Target the master branch <pr-branch-selection>`.
+* Adhere to the :ref:`coding_guidelines`.
+* Update the :ref:`documentation <pr-documentation>` if necessary.
+* Aim at making the PR as "ready-to-go" as you can. This helps to speed up
+  the review process.
+* It is ok to open incomplete or work-in-progress PRs if you need help or
+  feedback from the developers. You may mark these as
+  `draft pull requests <https://help.github.com/en/articles/about-pull-requests#draft-pull-requests>`_
+  on GitHub.
+* When updating your PR, instead of adding new commits to fix something, please
+  consider amending your initial commit(s) to keep the history clean.
+  You can achieve this using::
 
-* Formatting should follow `PEP8
-  <http://www.python.org/dev/peps/pep-0008/>`_.  Exceptions to these
-  rules are acceptable if it makes the code objectively more readable.
+      git commit --amend --no-edit
+      git push [your-remote-repo] [your-branch] --force-with-lease
 
-  - You should consider installing/enabling automatic PEP8 checking in your
-    editor.  Part of the test suite is checking PEP8 compliance, things
-    go smoother if the code is mostly PEP8 compliant to begin with.
+See also :ref:`contributing` for how to make a PR.
 
-* No tabs (only spaces).  No trailing whitespace.
+Summary for PR reviewers
+========================
 
-  - Configuring your editor to remove these things upon saving will
-    save a lot of trouble.
+.. note::
 
-* Import the following modules using the standard scipy conventions::
+   * If you have commit rights, then you are trusted to use them.
+     **Please help review and merge PRs!**
+   * Be patient and `kind <https://youtu.be/tzFWz5fiVKU?t=49m30s>`__ with
+     contributors.
 
-    import numpy as np
-    import numpy.ma as ma
-    import matplotlib as mpl
-    from matplotlib import pyplot as plt
-    import matplotlib.cbook as cbook
-    import matplotlib.collections as mcol
-    import matplotlib.patches as mpatches
+Content topics:
 
-* See below for additional points about
-  :ref:`keyword-argument-processing`, if code in your pull request
-  does that.
+.. rst-class:: checklist
 
-* Adding a new pyplot function involves generating code.  See
-  :ref:`new-pyplot-function` for more information.
+* Is the feature / bugfix reasonable?
+* Does the PR conform with the :ref:`coding_guidelines`?
+* Is the :ref:`documentation <pr-documentation>` (docstrings, examples,
+  what's new, API changes) updated?
+
+Organizational topics:
+
+.. rst-class:: checklist
+
+* Make sure all :ref:`automated tests <pr-automated-tests>` pass.
+* The PR should :ref:`target the master branch <pr-branch-selection>`.
+* Tag with descriptive :ref:`labels <pr-labels>`.
+* Set the :ref:`milestone <pr-milestones>`.
+* Keep an eye on the :ref:`number of commits <pr-squashing>`.
+* Approve if all of the above topics handled.
+* :ref:`Merge  <pr-merging>` if a sufficient number of approvals is reached.
+
+.. _pr-guidelines-details:
+
+Detailed Guidelines
+===================
+
+.. _pr-documentation:
 
 Documentation
 -------------
@@ -66,254 +96,269 @@ Documentation
 * Every new feature should be documented.  If it's a new module, don't
   forget to add a new rst file to the API docs.
 
-* Docstrings should be in `numpydoc format
-  <https://github.com/numpy/numpy/blob/master/doc/HOWTO_DOCUMENT.rst.txt>`_.
-  Don't be thrown off by the fact that many of the existing docstrings
-  are not in that format;  we are working to standardize on
-  `numpydoc`.
-
-  Docstrings should look like (at a minimum)::
-
-        def foo(bar, baz=None):
-            """
-            This is a prose description of foo and all the great
-            things it does.
-
-            Parameters
-            ----------
-            bar : (type of bar)
-                A description of bar
-
-            baz : (type of baz), optional
-                A description of baz
-
-            Returns
-            -------
-            foobar : (type of foobar)
-                A description of foobar
-            foobaz : (type of foobaz)
-                A description of foobaz
-            """
-            # some very clever code
-            return foobar, foobaz
-
-
-* Each high-level plotting function should have a simple example in
-  the `Example` section of the docstring.  This should be as simple as
-  possible to demonstrate the method.  More complex examples should go
-  in the `examples` tree.
+* Each high-level plotting function should have a small example in
+  the ``Examples`` section of the docstring.  This should be as simple as
+  possible to demonstrate the method.  More complex examples should go into
+  a dedicated example file in the :file:`examples` directory, which will be
+  rendered to the examples gallery in the documentation.
 
 * Build the docs and make sure all formatting warnings are addressed.
 
 * See :ref:`documenting-matplotlib` for our documentation style guide.
 
-* If your changes are non-trivial, please make an entry in the
-  :file:`CHANGELOG`.
-
 * If your change is a major new feature, add an entry to
   :file:`doc/users/whats_new.rst`.
 
 * If you change the API in a backward-incompatible way, please
-  document it in :file:`doc/api/api_changes.rst`.
+  document it in the relevant file in most recent
+  :file:`doc/api/api_changes_X.Y`.
 
-Testing
+.. _pr-labels:
+
+Labels
+------
+
+* If you have the rights to set labels, tag the PR with descriptive labels.
+  See the `list of labels <https://github.com/matplotlib/matplotlib/labels>`__.
+
+.. _pr-milestones:
+
+Milestones
+----------
+
+* Set the milestone according to these rules:
+
+  * *New features and API changes* are milestoned for the next minor release
+    ``v3.X.0``.
+
+  * *Bugfixes and docstring changes* are milestoned for the next patch
+    release ``v3.X.Y``
+
+  * *Documentation changes* (all .rst files and examples) are milestoned
+    ``v3.X-doc``
+
+  If multiple rules apply, choose the first matching from the above list.
+
+  All of these PRs should target the master branch. The milestone tag triggers
+  an :ref:`automatic backport <automated-backports>` for milestones which have
+  a corresponding branch.
+
+.. _pr-merging:
+
+Merging
 -------
 
-Using the test framework is discussed in detail in the section
-:ref:`testing`.
+* Documentation and examples may be merged by the first reviewer.  Use
+  the threshold "is this better than it was?" as the review criteria.
 
-* If the PR is a bugfix, add a test that fails prior to the change and
-  passes with the change.  Include any relevant issue numbers in the
-  docstring of the test.
+* For code changes (anything in ``src`` or ``lib``) at least two
+  core developers (those with commit rights) should review all pull
+  requests.  If you are the first to review a PR and approve of the
+  changes use the GitHub `'approve review'
+  <https://help.github.com/articles/reviewing-changes-in-pull-requests/>`__
+  tool to mark it as such.  If you are a subsequent reviewer please
+  approve the review and if you think no more review is needed, merge
+  the PR.
 
-* If this is a new feature, add a test that exercises as much of the
-  new feature as possible.  (The `--with-coverage` option may be
-  useful here).
+  Ensure that all API changes are documented in the relevant file in
+  the most recent :file:`doc/api/api_changes_X.Y` and significant new features
+  have an entry in :file:`doc/user/whats_new`.
 
-* Make sure the Travis tests are passing before merging.
+  - If a PR already has a positive review, a core developer (e.g. the first
+    reviewer, but not necessarily) may champion that PR for merging.  In order
+    to do so, they should ping all core devs both on GitHub and on the dev
+    mailing list, and label the PR with the "Merge with single review?" label.
+    Other core devs can then either review the PR and merge or reject it, or
+    simply request that it gets a second review before being merged.  If no one
+    asks for such a second review within a week, the PR can then be merged on
+    the basis of that single review.
 
-  - The Travis tests automatically test on all of the Python versions
-    matplotlib supports whenever a pull request is created or updated.
-    The `tox` support in matplotlib may be useful for testing locally.
+    A core dev should only champion one PR at a time and we should try to keep
+    the flow of championed PRs reasonable.
 
-Installation
-------------
+* Do not self merge, except for 'small' patches to un-break the CI or
+  when another reviewer explicitly allows it (ex, "Approve modulo CI
+  passing, may self merge when green").
 
-* If you have added new files or directories, or reorganized existing
-  ones, make sure the new files included in the match patterns in
-  :file:`MANIFEST.in`, and/or in `package_data` in `setup.py`.
+.. _pr-automated-tests:
 
-C/C++ extensions
+Automated tests
+---------------
+
+Whenever a pull request is created or updated, various automated test tools
+will run on all supported platforms and versions of Python.
+
+* Make sure the Linting, Travis, AppVeyor, CircleCI, and Azure pipelines are
+  passing before merging (All checks are listed at the bottom of the GitHub
+  page of your pull request). Here are some tips for finding the cause of the
+  test failure:
+
+  - If *Linting* fails, you have a code style issue, which will be listed
+    as annotations on the pull request's diff.
+  - If a Travis or AppVeyor run fails, search the log for ``FAILURES``. The
+    subsequent section will contain information on the failed tests.
+  - If CircleCI fails, likely you have some reStructuredText style issue in
+    the docs. Search the CircleCI log for ``WARNING``.
+  - If Azure pipelines fail with an image comparison error, you can find the
+    images as *artifacts* of the Azure job:
+
+    - Click *Details* on the check on the GitHub PR page.
+    - Click *View more details on Azure Pipelines* to go to Azure.
+    - On the overview page *artifacts* are listed in the section *Related*.
+
+
+* Codecov and LGTM are currently for information only. Their failure is not
+  necessarily a blocker.
+
+* tox_ is not used in the automated testing. It is supported for testing
+  locally.
+
+  .. _tox: https://tox.readthedocs.io/
+
+
+.. _pr-squashing:
+
+Number of commits and squashing
+-------------------------------
+
+* Squashing is case-by-case.  The balance is between burden on the
+  contributor, keeping a relatively clean history, and keeping a
+  history usable for bisecting.  The only time we are really strict
+  about it is to eliminate binary files (ex multiple test image
+  re-generations) and to remove upstream merges.
+
+* Do not let perfect be the enemy of the good, particularly for
+  documentation or example PRs.  If you find yourself making many
+  small suggestions, either open a PR against the original branch,
+  push changes to the contributor branch, or merge the PR and then
+  open a new PR against upstream.
+
+* If you push to a contributor branch leave a comment explaining what
+  you did, ex "I took the liberty of pushing a small clean-up PR to
+  your branch, thanks for your work.".  If you are going to make
+  substantial changes to the code or intent of the PR please check
+  with the contributor first.
+
+
+.. _branches_and_backports:
+
+Branches and Backports
+======================
+
+Current branches
+----------------
+The current active branches are
+
+*master*
+  The current development version. Future minor releases (*v3.N.0*) will be
+  branched from this. Supports Python 3.6+.
+
+*v3.N.x*
+  Maintenance branch for Matplotlib 3.N. Future patch releases will be
+  branched from this.  Supports Python 3.6+.
+
+*v3.N.M-doc*
+  Documentation for the current release.  On a patch release, this will be
+  replaced by a properly named branch for the new release.
+
+*v2.2.x*
+  Maintenance branch for Matplotlib 2.2 LTS.  Supports Python 2.7, 3.4+.
+
+*v2.2.N-doc*
+  Documentation for the current release.  On a patch release, this will be
+  replaced by a properly named branch for the new release.
+
+
+.. _pr-branch-selection:
+
+Branch selection for pull requests
+----------------------------------
+
+Generally, all pull requests should target the master branch.
+
+Other branches are fed through :ref:`automatic <automated-backports>` or
+:ref:`manual <manual-backports>`. Directly
+targeting other branches is only rarely necessary for special maintenance
+work.
+
+.. backport_strategy:
+
+Backport strategy
+-----------------
+
+We will always backport to the patch release branch (*v3.N.x*):
+
+- critical bug fixes (segfault, failure to import, things that the
+  user can not work around)
+- fixes for regressions against the last two releases.
+
+Everything else (regressions against older releases, bugs/api
+inconsistencies the user can work around in their code) are on a
+case-by-case basis, should be low-risk, and need someone to advocate
+for and shepherd through the backport.
+
+The only changes to be backported to the documentation branch (*v3.N.M-doc*)
+are changes to :file:`doc`, :file:`examples`, or :file:`tutorials`.
+Any changes to :file:`lib` or :file:`src` including docstring-only changes
+should not be backported to this branch.
+
+
+.. _automated-backports:
+
+Automated backports
+-------------------
+
+We use meeseeksdev bot to automatically backport merges to the correct
+maintenance branch base on the milestone.  To work properly the
+milestone must be set before merging.  If you have commit rights, the
+bot can also be manually triggered after a merge by leaving a message
+``@meeseeksdev backport to BRANCH`` on the PR.  If there are conflicts
+meeseekdevs will inform you that the backport needs to be done
+manually.
+
+The target branch is configured by putting ``on-merge: backport to
+TARGETBRANCH`` in the milestone description on it's own line.
+
+If the bot is not working as expected, please report issues to
+`Meeseeksdev <https://github.com/MeeseeksBox/MeeseeksDev>`__.
+
+
+.. _manual-backports:
+
+Manual backports
 ----------------
 
-* Extensions may be written in C or C++.
+When doing backports please copy the form used by meeseekdev,
+``Backport PR #XXXX: TITLE OF PR``.  If you need to manually resolve
+conflicts make note of them and how you resolved them in the commit
+message.
 
-* Code style should conform to PEP7 (understanding that PEP7 doesn't
-  address C++, but most of its admonitions still apply).
+We do a backport from master to v2.2.x assuming:
 
-* Interfacing with Python may be done either with the raw Python/C API
-  or Cython.  Use of PyCXX is discouraged for new code.
+* ``matplotlib`` is a read-only remote branch of the matplotlib/matplotlib repo
 
-* Python/C interface code should be kept separate from the core C/C++
-  code.  The interface code should be named `FOO_wrap.cpp`.
+The ``TARGET_SHA`` is the hash of the merge commit you would like to
+backport.  This can be read off of the GitHub PR page (in the UI with
+the merge notification) or through the git CLI tools.
 
-* Header file documentation (aka docstrings) should be in Numpydoc
-  format.  We don't plan on using automated tools for these
-  docstrings, and the Numpydoc format is well understood in the
-  scientific Python community.
+Assuming that you already have a local branch ``v2.2.x`` (if not, then
+``git checkout -b v2.2.x``), and that your remote pointing to
+``https://github.com/matplotlib/matplotlib`` is called ``upstream``::
 
-Style guide
-===========
+  git fetch upstream
+  git checkout v2.2.x  # or include -b if you don't already have this.
+  git reset --hard upstream/v2.2.x
+  git cherry-pick -m 1 TARGET_SHA
+  # resolve conflicts and commit if required
 
-.. _keyword-argument-processing:
+Files with conflicts can be listed by ``git status``,
+and will have to be fixed by hand (search on ``>>>>>``).  Once
+the conflict is resolved, you will have to re-add the file(s) to the branch
+and then continue the cherry pick::
 
-Keyword argument processing
----------------------------
+  git add lib/matplotlib/conflicted_file.py
+  git add lib/matplotlib/conflicted_file2.py
+  git cherry-pick --continue
 
-Matplotlib makes extensive use of ``**kwargs`` for pass-through
-customizations from one function to another.  A typical example is in
-:func:`matplotlib.pylab.text`.  The definition of the pylab text
-function is a simple pass-through to
-:meth:`matplotlib.axes.Axes.text`::
-
-  # in pylab.py
-  def text(*args, **kwargs):
-      ret =  gca().text(*args, **kwargs)
-      draw_if_interactive()
-      return ret
-
-:meth:`~matplotlib.axes.Axes.text` in simplified form looks like this,
-i.e., it just passes all ``args`` and ``kwargs`` on to
-:meth:`matplotlib.text.Text.__init__`::
-
-  # in axes.py
-  def text(self, x, y, s, fontdict=None, withdash=False, **kwargs):
-      t = Text(x=x, y=y, text=s, **kwargs)
-
-and :meth:`~matplotlib.text.Text.__init__` (again with liberties for
-illustration) just passes them on to the
-:meth:`matplotlib.artist.Artist.update` method::
-
-  # in text.py
-  def __init__(self, x=0, y=0, text='', **kwargs):
-      Artist.__init__(self)
-      self.update(kwargs)
-
-``update`` does the work looking for methods named like
-``set_property`` if ``property`` is a keyword argument.  I.e., no one
-looks at the keywords, they just get passed through the API to the
-artist constructor which looks for suitably named methods and calls
-them with the value.
-
-As a general rule, the use of ``**kwargs`` should be reserved for
-pass-through keyword arguments, as in the example above.  If all the
-keyword args are to be used in the function, and not passed
-on, use the key/value keyword args in the function definition rather
-than the ``**kwargs`` idiom.
-
-In some cases, you may want to consume some keys in the local
-function, and let others pass through.  You can ``pop`` the ones to be
-used locally and pass on the rest.  For example, in
-:meth:`~matplotlib.axes.Axes.plot`, ``scalex`` and ``scaley`` are
-local arguments and the rest are passed on as
-:meth:`~matplotlib.lines.Line2D` keyword arguments::
-
-  # in axes.py
-  def plot(self, *args, **kwargs):
-      scalex = kwargs.pop('scalex', True)
-      scaley = kwargs.pop('scaley', True)
-      if not self._hold: self.cla()
-      lines = []
-      for line in self._get_lines(*args, **kwargs):
-          self.add_line(line)
-          lines.append(line)
-
-Note: there is a use case when ``kwargs`` are meant to be used locally
-in the function (not passed on), but you still need the ``**kwargs``
-idiom.  That is when you want to use ``*args`` to allow variable
-numbers of non-keyword args.  In this case, python will not allow you
-to use named keyword args after the ``*args`` usage, so you will be
-forced to use ``**kwargs``.  An example is
-:meth:`matplotlib.contour.ContourLabeler.clabel`::
-
-  # in contour.py
-  def clabel(self, *args, **kwargs):
-      fontsize = kwargs.get('fontsize', None)
-      inline = kwargs.get('inline', 1)
-      self.fmt = kwargs.get('fmt', '%1.3f')
-      colors = kwargs.get('colors', None)
-      if len(args) == 0:
-          levels = self.levels
-          indices = range(len(self.levels))
-      elif len(args) == 1:
-         ...etc...
-
-Hints
-=====
-
-This section describes how to add certain kinds of new features to
-matplotlib.
-
-.. _custom_backend:
-
-Developing a new backend
-------------------------
-
-If you are working on a custom backend, the *backend* setting in
-:file:`matplotlibrc` (:ref:`customizing-matplotlib`) supports an
-external backend via the ``module`` directive.  if
-:file:`my_backend.py` is a matplotlib backend in your
-:envvar:`PYTHONPATH`, you can set use it on one of several ways
-
-* in matplotlibrc::
-
-    backend : module://my_backend
-
-* with the use directive is your script::
-
-    import matplotlib
-    matplotlib.use('module://my_backend')
-
-* from the command shell with the -d flag::
-
-    > python simple_plot.py -d module://my_backend
-
-
-.. _sample-data:
-
-Writing examples
-----------------
-
-We have hundreds of examples in subdirectories of
-:file:`matplotlib/examples`, and these are automatically generated
-when the website is built to show up both in the `examples
-<../examples/index.html>`_ and `gallery
-<../gallery.html>`_ sections of the website.
-
-Any sample data that the example uses should be kept small and
-distributed with matplotlib in the
-`lib/matplotlib/mpl-data/sample_data/` directory.  Then in your
-example code you can load it into a file handle with::
-
-    import matplotlib.cbook as cbook
-    fh = cbook.get_sample_data('mydata.dat')
-
-.. _new-pyplot-function:
-
-Writing a new pyplot function
------------------------------
-
-A large portion of the pyplot interface is automatically generated by the
-`boilerplate.py` script (in the root of the source tree). To add or remove
-a plotting method from pyplot, edit the appropriate list in `boilerplate.py`
-and then run the script which will update the content in
-`lib/matplotlib/pyplot.py`. Both the changes in `boilerplate.py` and
-`lib/matplotlib/pyplot.py` should be checked into the repository.
-
-Note: boilerplate.py looks for changes in the installed version of matplotlib
-and not the source tree. If you expect the pyplot.py file to show your new
-changes, but they are missing, this might be the cause.
-
-Install your new files by running `python setup.py build` and `python setup.py
-install` followed by `python boilerplate.py`. The new pyplot.py file should now
-have the latest changes.
+Use your discretion to push directly to upstream or to open a PR; be
+sure to push or PR against the ``v2.2.x`` upstream branch, not ``master``!

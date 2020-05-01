@@ -1,3 +1,13 @@
+"""
+=======
+Buttons
+=======
+
+Constructing a simple button GUI to modify a sine wave.
+
+The ``next`` and ``previous`` button widget helps visualize the wave with
+new frequencies.
+"""
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,6 +24,7 @@ l, = plt.plot(t, s, lw=2)
 
 class Index:
     ind = 0
+
     def next(self, event):
         self.ind += 1
         i = self.ind % len(freqs)
@@ -37,4 +48,3 @@ bprev = Button(axprev, 'Previous')
 bprev.on_clicked(callback.prev)
 
 plt.show()
-
